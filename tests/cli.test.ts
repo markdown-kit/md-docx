@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import type { CliOutput } from '../src/cli'
 import { runCli } from '../src/cli'
+import { convertMarkdownToDocx } from '../src/index'
 
 function captureOutput(): CliOutput & { logs: string[]; errors: string[] } {
   const logs: string[] = []
@@ -17,6 +18,12 @@ function captureOutput(): CliOutput & { logs: string[]; errors: string[] } {
     log: (message: string) => logs.push(message),
     error: (message: string) => errors.push(message),
   }
+}
+
+async function writeDocxFixture(filePath: string, markdown: string): Promise<void> {
+  const blob = await convertMarkdownToDocx(markdown)
+  const arrayBuffer = await blob.arrayBuffer()
+  await fsp.writeFile(filePath, Buffer.from(arrayBuffer))
 }
 
 describe('standalone CLI', () => {
@@ -257,9 +264,7 @@ describe('standalone CLI', () => {
     const exitCode = await runCli(['a.md', 'b.docx', 'extra.md'], output)
 
     expect(exitCode).toBe(1)
-    expect(output.errors.join('\n')).toContain(
-      'Expected either <input.md> <output.docx> or <input-dir>',
-    )
+    expect(output.errors.join('\n')).toContain('Expected one input path and optional output path')
   })
 
   it('fails when only one file positional argument is given', async () => {
@@ -270,7 +275,7 @@ describe('standalone CLI', () => {
     const exitCode = await runCli([inputPath], output)
 
     expect(exitCode).toBe(1)
-    expect(output.errors.join('\n')).toContain('Output path is required when input is a file')
+    expect(output.errors.join('\n')).toContain('Output path is required when input is a markdown file')
   })
 
   it('converts markdown files from current directory input', async () => {
@@ -302,5 +307,53 @@ describe('standalone CLI', () => {
     await expect(fsp.stat(path.join(docsDir, 'root.docx'))).resolves.toBeDefined()
     await expect(fsp.stat(path.join(nestedDir, 'child.docx'))).resolves.toBeDefined()
     expect(output.logs.join('\n')).toContain('Converted 2 file(s) from directory:')
+  })
+
+  it('converts a docx file to markdown with --from-docx', async () => {
+    const inputDocxPath = path.join(tempDir, 'reverse.docx')
+    const outputMdPath = path.join(tempDir, 'reverse.md')
+    const output = captureOutput()
+
+    await writeDocxFixture(inputDocxPath, '# Reverse Title\n\n- alpha\n- beta')
+
+    const exitCode = await runCli([inputDocxPath, outputMdPath, '--from-docx'], output)
+
+    expect(exitCode).toBe(0)
+    expect(output.errors).toHaveLength(0)
+    const markdown = await fsp.readFile(outputMdPath, 'utf8')
+    expect(markdown).toContain('Reverse Title')
+    expect(markdown).toContain('alpha')
+  })
+
+  it('auto-detects .docx input and infers output .md when omitted', async () => {
+    const inputDocxPath = path.join(tempDir, 'auto-reverse.docx')
+    const output = captureOutput()
+
+    await writeDocxFixture(inputDocxPath, '# Auto Reverse\n\nParagraph text.')
+
+    const exitCode = await runCli([inputDocxPath], output)
+
+    expect(exitCode).toBe(0)
+    const inferredMdPath = inputDocxPath.replace(/\.docx$/i, '.md')
+    await expect(fsp.stat(inferredMdPath)).resolves.toBeDefined()
+    const markdown = await fsp.readFile(inferredMdPath, 'utf8')
+    expect(markdown).toContain('Auto Reverse')
+  })
+
+  it('supports recursive DOCX-to-Markdown conversion for directories', async () => {
+    const docsDir = path.join(tempDir, 'reverse-docs')
+    const nestedDir = path.join(docsDir, 'nested')
+    const output = captureOutput()
+    await fsp.mkdir(nestedDir, { recursive: true })
+
+    await writeDocxFixture(path.join(docsDir, 'root.docx'), '# Root Docx\n\nContent.')
+    await writeDocxFixture(path.join(nestedDir, 'child.docx'), '# Child Docx\n\nNested content.')
+
+    const exitCode = await runCli([docsDir, '--from-docx', '-r'], output)
+
+    expect(exitCode).toBe(0)
+    await expect(fsp.stat(path.join(docsDir, 'root.md'))).resolves.toBeDefined()
+    await expect(fsp.stat(path.join(nestedDir, 'child.md'))).resolves.toBeDefined()
+    expect(output.logs.join('\n')).toContain('Converted 2 file(s) from DOCX to Markdown in directory:')
   })
 })

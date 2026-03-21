@@ -201,6 +201,53 @@ export interface Options {
   textReplacements?: TextReplacement[]
 }
 
+export interface DocxToMarkdownMammothOptions {
+  /**
+   * Custom style mapping rules supported by mammoth.
+   */
+  styleMap?: string[]
+  /**
+   * Whether mammoth default style map should be used.
+   */
+  includeDefaultStyleMap?: boolean
+  /**
+   * Whether embedded style maps in DOCX should be used.
+   */
+  includeEmbeddedStyleMap?: boolean
+  /**
+   * Preserve empty paragraphs from the DOCX source.
+   */
+  preserveEmptyParagraphs?: boolean
+}
+
+export interface DocxToMarkdownTurndownOptions {
+  headingStyle?: 'setext' | 'atx'
+  hr?: string
+  bulletListMarker?: '-' | '*' | '+'
+  codeBlockStyle?: 'indented' | 'fenced'
+  fence?: '```' | '~~~'
+  emDelimiter?: '_' | '*'
+  strongDelimiter?: '**' | '__'
+  linkStyle?: 'inlined' | 'referenced'
+  linkReferenceStyle?: 'full' | 'collapsed' | 'shortcut'
+}
+
+export interface DocxToMarkdownOptions {
+  /**
+   * Controls DOCX parsing behavior.
+   */
+  mammoth?: DocxToMarkdownMammothOptions
+  /**
+   * Controls HTML to Markdown conversion behavior.
+   */
+  turndown?: DocxToMarkdownTurndownOptions
+  /**
+   * When true (default), normalizes line endings, trailing spaces,
+   * and excessive blank lines.
+   */
+  normalizeWhitespace?: boolean
+}
+
 export interface TableData {
   headers: string[]
   rows: string[][]

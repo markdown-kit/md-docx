@@ -47,6 +47,9 @@ const defaultOptions: Options = {
 }
 
 export {
+  DocxToMarkdownMammothOptions,
+  DocxToMarkdownOptions,
+  DocxToMarkdownTurndownOptions,
   DocumentSection,
   HeaderFooterContent,
   HeaderFooterGroup,
@@ -56,6 +59,9 @@ export {
   Style,
   TableData,
 } from './types.js'
+
+export { convertDocxToMarkdown, DocxToMarkdownError } from './docxToMarkdown.js'
+export type { DocxInput } from './docxToMarkdown.js'
 
 /**
  * Custom error class for markdown conversion errors
