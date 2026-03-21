@@ -1,0 +1,25 @@
+# Source files
+src/
+*.ts
+
+# Test files
+__tests__/
+*.test.ts
+test-output/
+
+# Config files
+.git/
+.gitignore
+.npmignore
+tsconfig.json
+vitest.config.ts
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db

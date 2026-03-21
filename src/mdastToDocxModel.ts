@@ -1,0 +1,371 @@
+import type {
+  Root,
+  Node,
+  List,
+  Heading,
+  Paragraph,
+  Code,
+  Blockquote,
+  Image,
+  Table,
+  TableCell,
+  HTML,
+  PhrasingContent,
+} from 'mdast'
+
+import type {
+  DocxDocumentModel,
+  DocxBlockNode,
+  DocxTextNode,
+  DocxListItemNode,
+} from './docxModel.js'
+import type { Style, Options } from './types.js'
+
+/**
+ * Converts mdast AST to internal docx-friendly model
+ * Handles nested lists properly using AST structure
+ */
+export function mdastToDocxModel(root: Root, _style: Style, _options: Options): DocxDocumentModel {
+  const children: DocxBlockNode[] = []
+  let numberedListSequenceId = 0
+  const listSequenceMap = new Map<List, number>()
+
+  function processNode(node: Node): DocxBlockNode | DocxBlockNode[] | null {
+    switch (node.type) {
+      case 'heading':
+        return processHeading(node as Heading)
+      case 'paragraph':
+        return processParagraph(node as Paragraph)
+      case 'list':
+        return processList(node as List)
+      case 'code':
+        return processCodeBlock(node as Code)
+      case 'blockquote':
+        return processBlockquote(node as Blockquote)
+      case 'image':
+        return processImage(node as Image)
+      case 'table':
+        return processTable(node as Table)
+      case 'html':
+        // Handle HTML comments and special markers
+        const htmlValue = (node as HTML).value || ''
+        if (htmlValue.trim() === '<!--COMMENT:') {
+          // This is a comment marker - we'll handle it specially
+          return null // Will be handled by looking ahead
+        }
+        if (htmlValue.includes('COMMENT:')) {
+          const match = htmlValue.match(/COMMENT:\s*(.+?)(?:-->)?/)
+          if (match) {
+            return {
+              type: 'comment',
+              value: match[1].trim(),
+            }
+          }
+        }
+        if (htmlValue.includes('\\pagebreak') || htmlValue.includes('pagebreak')) {
+          return { type: 'pageBreak' }
+        }
+        return null
+      case 'thematicBreak':
+        // Horizontal rule - skip for now
+        return null
+      default:
+        return null
+    }
+  }
+
+  function processHeading(heading: Heading): DocxBlockNode {
+    const children = processInlineNodes(heading.children)
+    return {
+      type: 'heading',
+      level: heading.depth,
+      children,
+    }
+  }
+
+  function processParagraph(paragraph: Paragraph): DocxBlockNode {
+    const firstChild = paragraph.children[0]
+
+    // If the paragraph consists of a single image, treat it as a block image
+    if (paragraph.children.length === 1 && firstChild?.type === 'image') {
+      const img = firstChild
+      return {
+        type: 'image',
+        alt: img.alt ?? '',
+        url: img.url || '',
+      }
+    }
+
+    // Regular paragraph with inline content
+    const children = processInlineNodes(paragraph.children)
+    return {
+      type: 'paragraph',
+      children,
+    }
+  }
+
+  function processList(list: List): DocxBlockNode {
+    // Assign sequence ID for numbered lists
+    if (list.ordered && !listSequenceMap.has(list)) {
+      numberedListSequenceId++
+      listSequenceMap.set(list, numberedListSequenceId)
+    }
+
+    const listItems: DocxListItemNode[] = []
+    for (const item of list.children) {
+      const itemChildren: DocxBlockNode[] = []
+
+      // Process children of list item (ListItem.children is FlowContent[])
+      for (const child of item.children) {
+        if (child.type === 'list') {
+          // Nested list - process recursively
+          const nestedList = processList(child)
+          if (nestedList) {
+            itemChildren.push(nestedList)
+          }
+        } else if (child.type === 'paragraph') {
+          // Paragraph - convert to our paragraph model
+          const para = child
+          const inlineChildren = processInlineNodes(para.children)
+          itemChildren.push({
+            type: 'paragraph',
+            children: inlineChildren,
+          })
+        } else {
+          // Other block content (headings, code blocks, etc.)
+          const processed = processNode(child)
+          if (processed) {
+            if (Array.isArray(processed)) {
+              itemChildren.push(...processed)
+            } else {
+              itemChildren.push(processed)
+            }
+          }
+        }
+      }
+
+      // If no block children, create an empty paragraph
+      if (itemChildren.length === 0) {
+        itemChildren.push({
+          type: 'paragraph',
+          children: [],
+        })
+      }
+
+      listItems.push({
+        type: 'listItem',
+        children: itemChildren,
+      })
+    }
+
+    return {
+      type: 'list',
+      ordered: list.ordered ?? false,
+      children: listItems,
+      sequenceId: list.ordered ? listSequenceMap.get(list) : undefined,
+    }
+  }
+
+  function processCodeBlock(code: Code): DocxBlockNode {
+    return {
+      type: 'codeBlock',
+      language: code.lang ?? undefined,
+      value: code.value || '',
+    }
+  }
+
+  function processBlockquote(blockquote: Blockquote): DocxBlockNode {
+    const children: DocxBlockNode[] = []
+    for (const child of blockquote.children) {
+      const processed = processNode(child)
+      if (processed) {
+        if (Array.isArray(processed)) {
+          children.push(...processed)
+        } else {
+          children.push(processed)
+        }
+      }
+    }
+    return {
+      type: 'blockquote',
+      children,
+    }
+  }
+
+  function processImage(image: Image): DocxBlockNode {
+    return {
+      type: 'image',
+      alt: image.alt ?? '',
+      url: image.url || '',
+    }
+  }
+
+  function processTable(table: Table): DocxBlockNode {
+    const headers: DocxTextNode[][] = []
+    const rows: DocxTextNode[][][] = []
+
+    if (table.children.length > 0) {
+      const headerRow = table.children[0]
+      for (const cell of headerRow.children) {
+        headers.push(extractRichTextFromTableCell(cell))
+      }
+
+      for (let i = 1; i < table.children.length; i++) {
+        const row = table.children[i]
+        const rowData: DocxTextNode[][] = []
+        for (const cell of row.children) {
+          rowData.push(extractRichTextFromTableCell(cell))
+        }
+        rows.push(rowData)
+      }
+    }
+
+    return {
+      type: 'table',
+      headers,
+      rows,
+      align: table.align ?? undefined,
+    }
+  }
+
+  function extractRichTextFromTableCell(cell: TableCell): DocxTextNode[] {
+    return processInlineNodes(cell.children)
+  }
+
+  function processInlineNodes(nodes: PhrasingContent[]): DocxTextNode[] {
+    const result: DocxTextNode[] = []
+
+    for (const node of nodes) {
+      switch (node.type) {
+        case 'text':
+          result.push({
+            type: 'text',
+            value: node.value,
+          })
+          break
+        case 'emphasis':
+          const emphasisChildren = processInlineNodes(node.children)
+          for (const child of emphasisChildren) {
+            result.push({
+              ...child,
+              italic: true,
+            })
+          }
+          break
+        case 'strong':
+          const strongChildren = processInlineNodes(node.children)
+          for (const child of strongChildren) {
+            result.push({
+              ...child,
+              bold: true,
+            })
+          }
+          break
+        case 'delete':
+          const strikeChildren = processInlineNodes(node.children)
+          for (const child of strikeChildren) {
+            result.push({
+              ...child,
+              strikethrough: true,
+            })
+          }
+          break
+        case 'inlineCode':
+          result.push({
+            type: 'text',
+            value: node.value,
+            code: true,
+          })
+          break
+        case 'link':
+          const linkChildren = processInlineNodes(node.children)
+          for (const child of linkChildren) {
+            result.push({
+              ...child,
+              link: node.url,
+            })
+          }
+          break
+        case 'break':
+          result.push({
+            type: 'text',
+            value: '\n',
+          })
+          break
+        default:
+          // Unknown inline node - try to extract text
+          if ('value' in node && typeof node.value === 'string') {
+            result.push({
+              type: 'text',
+              value: node.value,
+            })
+          }
+      }
+    }
+
+    return result
+  }
+
+  // Process root children
+  for (const child of root.children) {
+    // Handle special cases for TOC and page breaks
+    if (child.type === 'paragraph') {
+      const para = child
+      // Check if paragraph contains only text nodes
+      const textContent = para.children
+        .filter((c) => c.type === 'text')
+        .map((c) => c.value)
+        .join('')
+        .trim()
+
+      if (textContent.toUpperCase().startsWith('COMMENT:')) {
+        children.push({
+          type: 'comment',
+          value: textContent.slice('COMMENT:'.length).trim(),
+        })
+        continue
+      }
+
+      if (textContent === '[TOC]') {
+        children.push({ type: 'tocPlaceholder' })
+        continue
+      }
+      if (textContent === '\\pagebreak') {
+        children.push({ type: 'pageBreak' })
+        continue
+      }
+    }
+
+    // Handle HTML comments for COMMENT: markers
+    if (child.type === 'html') {
+      const htmlValue = child.value || ''
+      if (htmlValue.includes('COMMENT:')) {
+        const match = htmlValue.match(/COMMENT:\s*(.+?)(?:-->)?/)
+        if (match) {
+          children.push({
+            type: 'comment',
+            value: match[1].trim(),
+          })
+          continue
+        }
+      }
+      if (htmlValue.includes('pagebreak') || htmlValue.includes('\\pagebreak')) {
+        children.push({ type: 'pageBreak' })
+        continue
+      }
+      // Skip other HTML nodes
+      continue
+    }
+
+    const processed = processNode(child)
+    if (processed) {
+      if (Array.isArray(processed)) {
+        children.push(...processed)
+      } else {
+        children.push(processed)
+      }
+    }
+  }
+
+  return { children }
+}
