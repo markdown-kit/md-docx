@@ -31,7 +31,7 @@ npx @markdownkit/md-docx input.md output.docx
 ## CLI Usage
 
 ```bash
-md-docx <input.md> <output.docx> [--options <options.json>]
+md-docx <input.md> [output.docx] [--options <options.json>]
 md-docx <input-dir> [--recursive] [--options <options.json>]
 md-docx --from-docx <input.docx> [output.md] [--options <options.json>]
 md-docx --from-docx <input-dir> [--recursive] [--options <options.json>]
@@ -41,6 +41,7 @@ md-docx --from-docx <input-dir> [--recursive] [--options <options.json>]
 
 ```bash
 md-docx README.md README.docx
+md-docx README.md
 md-docx .
 md-docx docs --recursive
 md-docx docs -r
@@ -50,13 +51,15 @@ md-docx --from-docx contract.docx contract.md
 md-docx --from-docx docs -r
 md-to-docx README.md README.docx
 mtd README.md README.docx
+mtd README.md
 mtd .
 mtd --from-docx contract.docx
 dtm contract.docx
-docx-to-md --from-docx docs -r
+dtm .
+docx-to-md docs -r
 ```
 
-> `md-to-docx` is kept as a compatibility alias. `mtd` is a short alias for `md-docx`. `dtm` and `docx-to-md` are reverse-conversion aliases.
+> `md-to-docx` is kept as a compatibility alias. `mtd` is a short alias for `md-docx`. `dtm` and `docx-to-md` default to DOCX → Markdown mode (so `dtm .` works without `--from-docx`).
 
 ### Options file
 

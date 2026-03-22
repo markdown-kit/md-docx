@@ -267,15 +267,29 @@ describe('standalone CLI', () => {
     expect(output.errors.join('\n')).toContain('Expected one input path and optional output path')
   })
 
-  it('fails when only one file positional argument is given', async () => {
+  it('infers .docx output when only a markdown input file is provided', async () => {
     const inputPath = path.join(tempDir, 'single.md')
     const output = captureOutput()
     await fsp.writeFile(inputPath, '# Single\n\nMissing output path should fail.')
 
     const exitCode = await runCli([inputPath], output)
 
+    expect(exitCode).toBe(0)
+    const inferredOutput = inputPath.replace(/\.md$/i, '.docx')
+    await expect(fsp.stat(inferredOutput)).resolves.toBeDefined()
+  })
+
+  it('fails when output is omitted for unsupported input extension', async () => {
+    const inputPath = path.join(tempDir, 'single.txt')
+    const output = captureOutput()
+    await fsp.writeFile(inputPath, 'plain text input')
+
+    const exitCode = await runCli([inputPath], output)
+
     expect(exitCode).toBe(1)
-    expect(output.errors.join('\n')).toContain('Output path is required when input is a markdown file')
+    expect(output.errors.join('\n')).toContain(
+      'Output path is required when input file extension is not .md/.markdown/.docx',
+    )
   })
 
   it('converts markdown files from current directory input', async () => {
@@ -355,5 +369,30 @@ describe('standalone CLI', () => {
     await expect(fsp.stat(path.join(docsDir, 'root.md'))).resolves.toBeDefined()
     await expect(fsp.stat(path.join(nestedDir, 'child.md'))).resolves.toBeDefined()
     expect(output.logs.join('\n')).toContain('Converted 2 file(s) from DOCX to Markdown in directory:')
+  })
+
+  it('treats dtm as DOCX-to-Markdown mode by default', async () => {
+    const docsDir = path.join(tempDir, 'dtm-default')
+    const output = captureOutput()
+    await fsp.mkdir(docsDir, { recursive: true })
+    await writeDocxFixture(path.join(docsDir, 'a.docx'), '# A\n\nAlpha')
+
+    const exitCode = await runCli([docsDir], output, 'dtm')
+
+    expect(exitCode).toBe(0)
+    await expect(fsp.stat(path.join(docsDir, 'a.md'))).resolves.toBeDefined()
+    expect(output.logs.join('\n')).toContain('DOCX mode detected')
+  })
+
+  it('treats docx-to-md as DOCX-to-Markdown mode by default', async () => {
+    const docsDir = path.join(tempDir, 'docx-to-md-default')
+    const output = captureOutput()
+    await fsp.mkdir(docsDir, { recursive: true })
+    await writeDocxFixture(path.join(docsDir, 'a.docx'), '# Alias\n\nContent')
+
+    const exitCode = await runCli([docsDir], output, 'docx-to-md')
+
+    expect(exitCode).toBe(0)
+    await expect(fsp.stat(path.join(docsDir, 'a.md'))).resolves.toBeDefined()
   })
 })

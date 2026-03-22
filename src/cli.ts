@@ -26,31 +26,89 @@ interface HelpCliArgs {
 
 type CliArgs = ParsedCliArgs | HelpCliArgs
 
-const HELP_TEXT = `Usage:
-  md-docx <input.md> <output.docx> [--options <options.json>]
-  md-docx <input-dir> [--recursive] [--options <options.json>]
-  md-docx --from-docx <input.docx> [output.md] [--options <options.json>]
-  md-docx --from-docx <input-dir> [--recursive] [--options <options.json>]
-
-Examples:
-  md-docx a.md b.docx
-  mtd a.md b.docx
-  mtd .
-  mtd docs --recursive
-  mtd --from-docx proposal.docx
-  mtd --from-docx docs -r
-  dtm proposal.docx
-  docx-to-md --from-docx docs -r
-  md-to-docx a.md b.docx
-  npx @markdownkit/md-docx a.md b.docx
-  md-docx a.md b.docx --options options.json`
-
 const DEFAULT_CLI_OUTPUT: CliOutput = {
   log: console.log,
   error: console.error,
 }
 
-function parseCliArgs(args: string[]): CliArgs {
+interface CliTheme {
+  colorEnabled: boolean
+}
+
+const ANSI = {
+  reset: '\u001B[0m',
+  bold: '\u001B[1m',
+  dim: '\u001B[2m',
+  cyan: '\u001B[36m',
+  green: '\u001B[32m',
+  yellow: '\u001B[33m',
+  red: '\u001B[31m',
+}
+
+function style(text: string, code: string, theme: CliTheme): string {
+  if (!theme.colorEnabled) {
+    return text
+  }
+  return `${code}${text}${ANSI.reset}`
+}
+
+function inferColorEnabled(): boolean {
+  if (process.env.NO_COLOR !== undefined) {
+    return false
+  }
+
+  return process.stdout.isTTY === true && process.stderr.isTTY === true
+}
+
+function normalizeInvocationName(invocationName: string): string {
+  const basename = path.basename(invocationName).toLowerCase()
+  return basename.endsWith('.js') ? basename.slice(0, -3) : basename
+}
+
+function inferDefaultFromDocx(invocationName: string): boolean {
+  const normalized = normalizeInvocationName(invocationName)
+  return normalized === 'dtm' || normalized === 'docx-to-md'
+}
+
+function formatHelpText(invocationName: string, theme: CliTheme): string {
+  const cmd = normalizeInvocationName(invocationName) || 'md-docx'
+
+  return [
+    `${style('md-docx CLI', `${ANSI.bold}${ANSI.cyan}`, theme)} ${style('Markdown ↔ DOCX converter', ANSI.dim, theme)}`,
+    '',
+    `${style('Usage:', ANSI.bold, theme)}`,
+    `  ${cmd} <input.md> [output.docx] [--options <options.json>]`,
+    `  ${cmd} <input-dir> [--recursive] [--options <options.json>]`,
+    `  ${cmd} --from-docx <input.docx> [output.md] [--options <options.json>]`,
+    `  ${cmd} --from-docx <input-dir> [--recursive] [--options <options.json>]`,
+    '',
+    `${style('Examples:', ANSI.bold, theme)}`,
+    `  mtd .`,
+    `  mtd ./docs -r`,
+    `  dtm .`,
+    `  dtm ./contracts -r`,
+    `  md-docx report.md`,
+    `  md-docx --from-docx contract.docx`,
+    '',
+    `${style('Aliases:', ANSI.bold, theme)}`,
+    `  Markdown → DOCX: ${style('md-docx, mtd, md-to-docx', ANSI.green, theme)}`,
+    `  DOCX → Markdown: ${style('dtm, docx-to-md', ANSI.green, theme)}`,
+  ].join('\n')
+}
+
+function formatErrorMessage(message: string, theme: CliTheme): string {
+  return `${style('✖ Error:', `${ANSI.bold}${ANSI.red}`, theme)} ${message}`
+}
+
+function formatInfoMessage(message: string, theme: CliTheme): string {
+  return `${style('ℹ', ANSI.cyan, theme)} ${message}`
+}
+
+function formatSuccessMessage(message: string, theme: CliTheme): string {
+  return `${style('✔', ANSI.green, theme)} ${message}`
+}
+
+function parseCliArgs(args: string[], defaultFromDocx: boolean): CliArgs {
   if (args.includes('-h') || args.includes('--help')) {
     return { showHelp: true }
   }
@@ -58,7 +116,7 @@ function parseCliArgs(args: string[]): CliArgs {
   const positional: string[] = []
   let optionsPath: string | undefined
   let recursive = false
-  let fromDocx = false
+  let fromDocx = defaultFromDocx
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
@@ -188,11 +246,14 @@ async function readOptionsFile(optionsPath: string): Promise<Record<string, unkn
 export async function runCli(
   args: string[],
   output: CliOutput = DEFAULT_CLI_OUTPUT,
+  invocationName = 'md-docx',
 ): Promise<number> {
+  const theme: CliTheme = { colorEnabled: inferColorEnabled() }
+
   try {
-    const parsedArgs = parseCliArgs(args)
+    const parsedArgs = parseCliArgs(args, inferDefaultFromDocx(invocationName))
     if ('showHelp' in parsedArgs) {
-      output.log(HELP_TEXT)
+      output.log(formatHelpText(invocationName, theme))
       return 0
     }
 
@@ -219,17 +280,24 @@ export async function runCli(
           outputPath,
           optionsObject as DocxToMarkdownOptions | undefined,
         )
-        output.log(`Markdown created at: ${outputPath}`)
+        output.log(formatSuccessMessage(`Markdown created at: ${outputPath}`, theme))
         return 0
       }
 
-      if (!parsedArgs.outputPath) {
-        throw new Error('Output path is required when input is a markdown file')
+      const outputPath = parsedArgs.outputPath
+        ? path.resolve(parsedArgs.outputPath)
+        : isMarkdownFile(inputPath)
+          ? inputPath.replace(/\.(md|markdown)$/i, '.docx')
+          : undefined
+
+      if (!outputPath) {
+        throw new Error(
+          'Output path is required when input file extension is not .md/.markdown/.docx',
+        )
       }
 
-      const outputPath = path.resolve(parsedArgs.outputPath)
       await convertSingleMarkdownFile(inputPath, outputPath, optionsObject as Options | undefined)
-      output.log(`DOCX created at: ${outputPath}`)
+      output.log(formatSuccessMessage(`DOCX created at: ${outputPath}`, theme))
       return 0
     }
 
@@ -251,6 +319,13 @@ export async function runCli(
         )
       }
 
+      output.log(
+        formatInfoMessage(
+          `DOCX mode detected. Converting ${docxFiles.length} file(s) from ${inputPath}`,
+          theme,
+        ),
+      )
+
       let convertedCount = 0
       for (const docxFilePath of docxFiles) {
         const outputPath = docxFilePath.replace(/\.docx$/i, '.md')
@@ -260,10 +335,15 @@ export async function runCli(
           optionsObject as DocxToMarkdownOptions | undefined,
         )
         convertedCount++
-        output.log(`Markdown created at: ${outputPath}`)
+        output.log(formatSuccessMessage(`Markdown created at: ${outputPath}`, theme))
       }
 
-      output.log(`Converted ${convertedCount} file(s) from DOCX to Markdown in directory: ${inputPath}`)
+      output.log(
+        formatSuccessMessage(
+          `Converted ${convertedCount} file(s) from DOCX to Markdown in directory: ${inputPath}`,
+          theme,
+        ),
+      )
       return 0
     }
 
@@ -277,15 +357,24 @@ export async function runCli(
       )
     }
 
+    output.log(
+      formatInfoMessage(
+        `Markdown mode detected. Converting ${markdownFiles.length} file(s) from ${inputPath}`,
+        theme,
+      ),
+    )
+
     let convertedCount = 0
     for (const markdownFilePath of markdownFiles) {
       const outputPath = markdownFilePath.replace(/\.(md|markdown)$/i, '.docx')
       await convertSingleMarkdownFile(markdownFilePath, outputPath, optionsObject as Options | undefined)
       convertedCount++
-      output.log(`DOCX created at: ${outputPath}`)
+      output.log(formatSuccessMessage(`DOCX created at: ${outputPath}`, theme))
     }
 
-    output.log(`Converted ${convertedCount} file(s) from directory: ${inputPath}`)
+    output.log(
+      formatSuccessMessage(`Converted ${convertedCount} file(s) from directory: ${inputPath}`, theme),
+    )
     return 0
   } catch (err) {
     const message =
@@ -294,9 +383,9 @@ export async function runCli(
         : typeof err === 'object' && err !== null && 'message' in err
           ? String((err as { message: unknown }).message)
           : String(err)
-    output.error(`Error: ${message}`)
+    output.error(formatErrorMessage(message, theme))
     output.error('')
-    output.error(HELP_TEXT)
+    output.error(formatHelpText(invocationName, theme))
     return 1
   }
 }
@@ -314,7 +403,7 @@ const invokedFilePath = process.argv[1] ? resolveRealPath(process.argv[1]) : ''
 const currentRealFilePath = resolveRealPath(currentFilePath)
 
 if (invokedFilePath === currentRealFilePath) {
-  void runCli(process.argv.slice(2)).then((exitCode) => {
+  void runCli(process.argv.slice(2), DEFAULT_CLI_OUTPUT, process.argv[1] ?? 'md-docx').then((exitCode) => {
     process.exitCode = exitCode
   })
 }

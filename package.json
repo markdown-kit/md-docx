@@ -1,6 +1,6 @@
 {
   "name": "@markdownkit/md-docx",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Convert Markdown to DOCX and DOCX to Markdown with rich formatting and a standalone CLI",
   "keywords": [
     "converter",
