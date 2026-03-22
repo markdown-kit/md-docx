@@ -1,6 +1,6 @@
 {
   "name": "@markdownkit/md-docx",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Convert Markdown to DOCX and DOCX to Markdown with rich formatting and a standalone CLI",
   "keywords": [
     "converter",
@@ -23,11 +23,11 @@
     "url": "https://github.com/markdown-kit/md-docx.git"
   },
   "bin": {
+    "docx-to-md": "./dist/cli.js",
+    "dtm": "./dist/cli.js",
     "md-docx": "./dist/cli.js",
     "md-to-docx": "./dist/cli.js",
-    "mtd": "./dist/cli.js",
-    "docx-to-md": "./dist/cli.js",
-    "dtm": "./dist/cli.js"
+    "mtd": "./dist/cli.js"
   },
   "files": [
     "dist",
@@ -61,8 +61,8 @@
     "lint": "oxlint .",
     "lint:ci": "oxlint --deny-warnings .",
     "lint:fix": "oxlint --fix .",
-    "lint:fix-unsafe": "oxlint --import-plugin node-plugin --type-aware --type-check --vitest-plugin --fix --fix-suggestions --fix-dangerously .",
-    "check:fix-suggestions": "oxlint --import-plugin node-plugin --type-aware --type-check --vitest-plugin --fix --fix-suggestions . && oxfmt --write .",
+    "lint:fix-unsafe": "oxlint --import-plugin --node-plugin --type-aware --type-check --vitest-plugin --fix --fix-suggestions --fix-dangerously .",
+    "check:fix-suggestions": "oxlint --import-plugin --node-plugin --type-aware --type-check --vitest-plugin --fix --fix-suggestions . && oxfmt --write .",
     "check": "pnpm run format:check && pnpm run lint:ci && pnpm run typecheck",
     "check:full": "pnpm run check && pnpm run test",
     "prepublishOnly": "pnpm run typecheck && pnpm run test && pnpm run build"

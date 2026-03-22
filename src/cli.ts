@@ -314,8 +314,11 @@ export async function runCli(
       if (docxFiles.length === 0) {
         throw new Error(
           `No DOCX files found in directory: ${parsedArgs.inputPath}. ` +
-            `Supported input extension: .docx${parsedArgs.recursive ? '' : '. ' +
-              'If your files are in subfolders, run with -r/--recursive'}`,
+            `Supported input extension: .docx${
+              parsedArgs.recursive
+                ? ''
+                : '. ' + 'If your files are in subfolders, run with -r/--recursive'
+            }`,
         )
       }
 
@@ -367,13 +370,20 @@ export async function runCli(
     let convertedCount = 0
     for (const markdownFilePath of markdownFiles) {
       const outputPath = markdownFilePath.replace(/\.(md|markdown)$/i, '.docx')
-      await convertSingleMarkdownFile(markdownFilePath, outputPath, optionsObject as Options | undefined)
+      await convertSingleMarkdownFile(
+        markdownFilePath,
+        outputPath,
+        optionsObject as Options | undefined,
+      )
       convertedCount++
       output.log(formatSuccessMessage(`DOCX created at: ${outputPath}`, theme))
     }
 
     output.log(
-      formatSuccessMessage(`Converted ${convertedCount} file(s) from directory: ${inputPath}`, theme),
+      formatSuccessMessage(
+        `Converted ${convertedCount} file(s) from directory: ${inputPath}`,
+        theme,
+      ),
     )
     return 0
   } catch (err) {
@@ -403,7 +413,9 @@ const invokedFilePath = process.argv[1] ? resolveRealPath(process.argv[1]) : ''
 const currentRealFilePath = resolveRealPath(currentFilePath)
 
 if (invokedFilePath === currentRealFilePath) {
-  void runCli(process.argv.slice(2), DEFAULT_CLI_OUTPUT, process.argv[1] ?? 'md-docx').then((exitCode) => {
-    process.exitCode = exitCode
-  })
+  void runCli(process.argv.slice(2), DEFAULT_CLI_OUTPUT, process.argv[1] ?? 'md-docx').then(
+    (exitCode) => {
+      process.exitCode = exitCode
+    },
+  )
 }

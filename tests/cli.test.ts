@@ -368,7 +368,9 @@ describe('standalone CLI', () => {
     expect(exitCode).toBe(0)
     await expect(fsp.stat(path.join(docsDir, 'root.md'))).resolves.toBeDefined()
     await expect(fsp.stat(path.join(nestedDir, 'child.md'))).resolves.toBeDefined()
-    expect(output.logs.join('\n')).toContain('Converted 2 file(s) from DOCX to Markdown in directory:')
+    expect(output.logs.join('\n')).toContain(
+      'Converted 2 file(s) from DOCX to Markdown in directory:',
+    )
   })
 
   it('treats dtm as DOCX-to-Markdown mode by default', async () => {
