@@ -5,6 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { convertDocxToMarkdown, convertMarkdownToDocx } from './index.js'
+import { parseDocxToMarkdownOptionsFile, parseMarkdownCliOptionsFile } from './options-file.js'
 import type { DocxToMarkdownOptions, Options } from './types.js'
 
 export interface CliOutput {
@@ -173,6 +174,10 @@ function isDocxFile(filePath: string): boolean {
   return lower.endsWith('.docx') && !path.basename(filePath).startsWith('~$')
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 async function collectFiles(
   dirPath: string,
   recursive: boolean,
@@ -230,17 +235,56 @@ async function readOptionsFile(optionsPath: string): Promise<Record<string, unkn
   try {
     const parsed: unknown = JSON.parse(content)
 
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    if (!isPlainObject(parsed)) {
       throw new Error('Options JSON must be an object')
     }
 
-    return parsed as Record<string, unknown>
+    return parsed
   } catch (err) {
     if (err instanceof SyntaxError) {
       throw new TypeError(`Invalid JSON in options file "${optionsPath}": ${err.message}`)
     }
     throw err
   }
+}
+
+function resolveMarkdownCliOptions(
+  value: Record<string, unknown> | undefined,
+  context: string,
+): Options | undefined {
+  if (!value) {
+    return undefined
+  }
+
+  return parseMarkdownCliOptionsFile(value, context)
+}
+
+function resolveDocxToMarkdownCliOptions(
+  value: Record<string, unknown> | undefined,
+  context: string,
+): DocxToMarkdownOptions | undefined {
+  if (!value) {
+    return undefined
+  }
+
+  return parseDocxToMarkdownOptionsFile(value, context)
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'message' in error &&
+    typeof error.message === 'string'
+  ) {
+    return error.message
+  }
+
+  return String(error)
 }
 
 export async function runCli(
@@ -261,6 +305,9 @@ export async function runCli(
     const optionsObject = parsedArgs.optionsPath
       ? await readOptionsFile(path.resolve(parsedArgs.optionsPath))
       : undefined
+    const optionsContext = parsedArgs.optionsPath
+      ? `options file "${path.resolve(parsedArgs.optionsPath)}"`
+      : 'options'
     const inputStat = await fs.stat(inputPath)
 
     if (inputStat.isFile()) {
@@ -272,14 +319,11 @@ export async function runCli(
           throw new Error('When --from-docx is set, input file must have .docx extension')
         }
 
+        const docxOptions = resolveDocxToMarkdownCliOptions(optionsObject, optionsContext)
         const outputPath = parsedArgs.outputPath
           ? path.resolve(parsedArgs.outputPath)
           : inputPath.replace(/\.docx$/i, '.md')
-        await convertSingleDocxFile(
-          inputPath,
-          outputPath,
-          optionsObject as DocxToMarkdownOptions | undefined,
-        )
+        await convertSingleDocxFile(inputPath, outputPath, docxOptions)
         output.log(formatSuccessMessage(`Markdown created at: ${outputPath}`, theme))
         return 0
       }
@@ -296,7 +340,8 @@ export async function runCli(
         )
       }
 
-      await convertSingleMarkdownFile(inputPath, outputPath, optionsObject as Options | undefined)
+      const markdownOptions = resolveMarkdownCliOptions(optionsObject, optionsContext)
+      await convertSingleMarkdownFile(inputPath, outputPath, markdownOptions)
       output.log(formatSuccessMessage(`DOCX created at: ${outputPath}`, theme))
       return 0
     }
@@ -317,7 +362,7 @@ export async function runCli(
             `Supported input extension: .docx${
               parsedArgs.recursive
                 ? ''
-                : '. ' + 'If your files are in subfolders, run with -r/--recursive'
+                : '. If your files are in subfolders, run with -r/--recursive'
             }`,
         )
       }
@@ -330,13 +375,10 @@ export async function runCli(
       )
 
       let convertedCount = 0
+      const docxOptions = resolveDocxToMarkdownCliOptions(optionsObject, optionsContext)
       for (const docxFilePath of docxFiles) {
         const outputPath = docxFilePath.replace(/\.docx$/i, '.md')
-        await convertSingleDocxFile(
-          docxFilePath,
-          outputPath,
-          optionsObject as DocxToMarkdownOptions | undefined,
-        )
+        await convertSingleDocxFile(docxFilePath, outputPath, docxOptions)
         convertedCount++
         output.log(formatSuccessMessage(`Markdown created at: ${outputPath}`, theme))
       }
@@ -368,13 +410,10 @@ export async function runCli(
     )
 
     let convertedCount = 0
+    const markdownOptions = resolveMarkdownCliOptions(optionsObject, optionsContext)
     for (const markdownFilePath of markdownFiles) {
       const outputPath = markdownFilePath.replace(/\.(md|markdown)$/i, '.docx')
-      await convertSingleMarkdownFile(
-        markdownFilePath,
-        outputPath,
-        optionsObject as Options | undefined,
-      )
+      await convertSingleMarkdownFile(markdownFilePath, outputPath, markdownOptions)
       convertedCount++
       output.log(formatSuccessMessage(`DOCX created at: ${outputPath}`, theme))
     }
@@ -387,12 +426,7 @@ export async function runCli(
     )
     return 0
   } catch (err) {
-    const message =
-      err instanceof Error
-        ? err.message
-        : typeof err === 'object' && err !== null && 'message' in err
-          ? String((err as { message: unknown }).message)
-          : String(err)
+    const message = getErrorMessage(err)
     output.error(formatErrorMessage(message, theme))
     output.error('')
     output.error(formatHelpText(invocationName, theme))

@@ -1,4 +1,3 @@
-import type { HeadingLevel } from 'docx'
 import {
   Paragraph,
   TextRun,
@@ -12,6 +11,7 @@ import {
   ExternalHyperlink,
   ImageRun,
   Bookmark,
+  HeadingLevel,
 } from 'docx'
 
 import type { Style, TableData, HeadingConfig, ListItemConfig } from './types.js'
@@ -30,6 +30,23 @@ function sanitizeForBookmarkId(text: string): string {
 
 function resolveFontFamily(style?: Style): string | undefined {
   return style?.fontFamily ?? style?.fontFamilly
+}
+
+function resolveHeadingLevel(level: number): (typeof HeadingLevel)[keyof typeof HeadingLevel] {
+  switch (level) {
+    case 1:
+      return HeadingLevel.HEADING_1
+    case 2:
+      return HeadingLevel.HEADING_2
+    case 3:
+      return HeadingLevel.HEADING_3
+    case 4:
+      return HeadingLevel.HEADING_4
+    case 5:
+      return HeadingLevel.HEADING_5
+    default:
+      return HeadingLevel.HEADING_1
+  }
 }
 
 function hasUnescapedMarker(text: string, marker: string, startIndex: number): boolean {
@@ -117,7 +134,7 @@ export function processHeading(
         children: processedTextRuns,
       }),
     ],
-    heading: headingLevel as unknown as (typeof HeadingLevel)[keyof typeof HeadingLevel],
+    heading: resolveHeadingLevel(headingLevel),
     spacing: {
       before: config.level === 1 ? style.headingSpacing * 2 : style.headingSpacing,
       after: style.headingSpacing / 2,

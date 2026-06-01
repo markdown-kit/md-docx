@@ -35,6 +35,7 @@ export interface DocxListNode {
   ordered: boolean
   children: DocxListItemNode[]
   sequenceId?: number // For numbered lists, tracks sequence across document
+  start?: number // Starting number for ordered lists (mdast `start`)
 }
 
 export interface DocxCodeBlockNode {
@@ -70,6 +71,10 @@ export interface DocxPageBreakNode {
   type: 'pageBreak'
 }
 
+export interface DocxThematicBreakNode {
+  type: 'thematicBreak'
+}
+
 export interface DocxTocPlaceholderNode {
   type: 'tocPlaceholder'
 }
@@ -84,6 +89,7 @@ export type DocxBlockNode =
   | DocxTableNode
   | DocxCommentNode
   | DocxPageBreakNode
+  | DocxThematicBreakNode
   | DocxTocPlaceholderNode
 
 export interface DocxDocumentModel {

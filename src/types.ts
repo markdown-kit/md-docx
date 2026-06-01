@@ -285,6 +285,15 @@ export interface TextReplacement {
   replace: Replace
 }
 
+export interface JsonTextReplacement {
+  find: string
+  replace: string
+}
+
+export interface MarkdownCliOptionsFile extends Omit<Options, 'textReplacements'> {
+  textReplacements?: JsonTextReplacement[]
+}
+
 export const defaultStyle: Style = {
   titleSize: 32,
   headingSpacing: 240,

@@ -4,16 +4,53 @@ import { createRequire } from 'node:module'
 import * as mammoth from 'mammoth'
 import TurndownService from 'turndown'
 
+import { parseDocxToMarkdownOptionsFile } from './options-file.js'
 import type { DocxToMarkdownOptions, DocxToMarkdownTurndownOptions } from './types.js'
 
 type TurndownGfmPlugin = (service: TurndownService) => void
 
 const require = createRequire(import.meta.url)
-const { gfm } = require('turndown-plugin-gfm') as {
-  gfm: TurndownGfmPlugin
+
+function isObjectRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
 }
 
+function loadGfmPlugin(): TurndownGfmPlugin {
+  const pluginModule: unknown = require('turndown-plugin-gfm')
+
+  if (!isObjectRecord(pluginModule) || typeof pluginModule.gfm !== 'function') {
+    throw new TypeError('turndown-plugin-gfm did not expose a callable gfm plugin')
+  }
+
+  const plugin = pluginModule.gfm
+  return (service: TurndownService) => {
+    plugin(service)
+  }
+}
+
+const gfm = loadGfmPlugin()
+
 export type DocxInput = ArrayBuffer | Uint8Array | Buffer
+
+const defaultMammothStyleMap = [
+  "p[style-name='Title'] => h1:fresh",
+  "p[style-name='Heading 1'] => h1:fresh",
+  "p[style-name='Heading 2'] => h2:fresh",
+  "p[style-name='Heading 3'] => h3:fresh",
+  "p[style-name='Heading 4'] => h4:fresh",
+  "p[style-name='Heading 5'] => h5:fresh",
+  "p[style-name='Heading1'] => h1:fresh",
+  "p[style-name='Heading2'] => h2:fresh",
+  "p[style-name='Heading3'] => h3:fresh",
+  "p[style-name='Heading4'] => h4:fresh",
+  "p[style-name='Heading5'] => h5:fresh",
+  "p[style-id='1'] => h1:fresh",
+  "p[style-id='2'] => h2:fresh",
+  "p[style-id='3'] => h3:fresh",
+  "p[style-id='4'] => h4:fresh",
+  "p[style-id='5'] => h5:fresh",
+  "p[style-id='6'] => h6:fresh",
+] as const
 
 const defaultTurndownOptions: DocxToMarkdownTurndownOptions = {
   headingStyle: 'atx',
@@ -50,6 +87,17 @@ function toUint8Array(input: DocxInput): Uint8Array {
 
 function normalizeMarkdownOutput(markdown: string): string {
   const normalized = markdown
+    .replace(/<table[\s\S]*?<\/table>/gi, (htmlTable) => {
+      const turndown = new TurndownService({
+        ...defaultTurndownOptions,
+      })
+      turndown.use(gfm)
+      return `\n${turndown.turndown(htmlTable).trim()}\n`
+    })
+    .replace(/^(#{1,6})\s+\*\*(.+?)\*\*\s*$/gm, '$1 $2')
+    .replace(/^(#{1,6})\s+_(.+?)_\s*$/gm, '$1 $2')
+    .replace(/^\*\*(.+?)\*\*\s*$/gm, '$1')
+    .replace(/^_(.+?)_\s*$/gm, '$1')
     .replace(/\r\n/g, '\n')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -67,6 +115,16 @@ function createTurndownService(options: DocxToMarkdownOptions): TurndownService 
   return turndown
 }
 
+function preprocessMammothHtml(html: string): string {
+  return html
+    .replace(/<(td|th)>\s*<p>([\s\S]*?)<\/p>\s*<\/(td|th)>/gi, (_match, openTag, content) => {
+      return `<${String(openTag).toLowerCase()}>${content}</${String(openTag).toLowerCase()}>`
+    })
+    .replace(/<(\/?)([A-Za-z][A-Za-z0-9-]*)/g, (_match, slash: string, tagName: string) => {
+      return `<${slash}${tagName.toLowerCase()}`
+    })
+}
+
 /**
  * Convert DOCX binary content to Markdown.
  */
@@ -75,6 +133,7 @@ export async function convertDocxToMarkdown(
   options: DocxToMarkdownOptions = {},
 ): Promise<string> {
   try {
+    const validatedOptions = parseDocxToMarkdownOptionsFile(options, 'options')
     const inputBytes = toUint8Array(docxInput)
     if (inputBytes.byteLength === 0) {
       throw new DocxToMarkdownError('Invalid DOCX input: file content is empty')
@@ -85,18 +144,19 @@ export async function convertDocxToMarkdown(
         buffer: Buffer.from(inputBytes),
       },
       {
-        styleMap: options.mammoth?.styleMap,
-        includeDefaultStyleMap: options.mammoth?.includeDefaultStyleMap,
-        includeEmbeddedStyleMap: options.mammoth?.includeEmbeddedStyleMap,
-        ignoreEmptyParagraphs: options.mammoth?.preserveEmptyParagraphs === true ? false : true,
+        styleMap: [...defaultMammothStyleMap, ...(validatedOptions.mammoth?.styleMap ?? [])],
+        includeDefaultStyleMap: validatedOptions.mammoth?.includeDefaultStyleMap,
+        includeEmbeddedStyleMap: validatedOptions.mammoth?.includeEmbeddedStyleMap,
+        ignoreEmptyParagraphs:
+          validatedOptions.mammoth?.preserveEmptyParagraphs === true ? false : true,
         convertImage: mammoth.images.dataUri,
       },
     )
 
-    const turndown = createTurndownService(options)
-    const markdown = turndown.turndown(mammothResult.value)
+    const turndown = createTurndownService(validatedOptions)
+    const markdown = turndown.turndown(preprocessMammothHtml(mammothResult.value))
 
-    if (options.normalizeWhitespace === false) {
+    if (validatedOptions.normalizeWhitespace === false) {
       return markdown
     }
 

@@ -32,6 +32,35 @@ describe('convertDocxToMarkdown', () => {
     expect(markdown).toContain('two')
   })
 
+  it('removes bold-only wrappers from standalone heading-like lines', async () => {
+    const sourceMarkdown = '# **CAPYDB**\n\n## **Technical Specification**\n\nParagraph.'
+    const docxBlob = await convertMarkdownToDocx(sourceMarkdown)
+    const docxBuffer = Buffer.from(await docxBlob.arrayBuffer())
+
+    const markdown = await convertDocxToMarkdown(docxBuffer)
+
+    expect(markdown).toContain('CAPYDB')
+    expect(markdown).toContain('Technical Specification')
+    expect(markdown).not.toContain('**CAPYDB**')
+    expect(markdown).not.toContain('**Technical Specification**')
+  })
+
+  it('converts table content without leaking raw html table tags', async () => {
+    const sourceMarkdown =
+      '# Table Spec\n\n| Pillar | Responsibility |\n| --- | --- |\n| Pillar A | Storage |\n| Pillar B | Proxy |\n'
+    const docxBlob = await convertMarkdownToDocx(sourceMarkdown)
+    const docxBuffer = Buffer.from(await docxBlob.arrayBuffer())
+
+    const markdown = await convertDocxToMarkdown(docxBuffer)
+
+    expect(markdown).toContain('|')
+    expect(markdown).toContain('Pillar')
+    expect(markdown).toContain('Responsibility')
+    expect(markdown).not.toMatch(/<\/?table/i)
+    expect(markdown).not.toMatch(/<\/?tbody/i)
+    expect(markdown).not.toMatch(/<\/?tr/i)
+  })
+
   it('throws on empty DOCX content', async () => {
     await expect(convertDocxToMarkdown(Buffer.alloc(0))).rejects.toThrow(
       'Invalid DOCX input: file content is empty',

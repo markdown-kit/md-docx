@@ -258,6 +258,39 @@ describe('standalone CLI', () => {
     expect(output.errors.join('\n')).toContain('Options JSON must be an object')
   })
 
+  it('fails when markdown options contain an invalid documentType', async () => {
+    const inputPath = path.join(tempDir, 'input.md')
+    const outputPath = path.join(tempDir, 'output.docx')
+    const optionsPath = path.join(tempDir, 'invalid-document-type.json')
+    const output = captureOutput()
+
+    await fsp.writeFile(inputPath, '# Test\n\nContent.')
+    await fsp.writeFile(optionsPath, JSON.stringify({ documentType: 'memo' }))
+
+    const exitCode = await runCli([inputPath, outputPath, '--options', optionsPath], output)
+
+    expect(exitCode).toBe(1)
+    expect(output.errors.join('\n')).toContain('documentType must be one of')
+  })
+
+  it('fails when DOCX-to-Markdown options contain markdown-only keys', async () => {
+    const inputDocxPath = path.join(tempDir, 'reverse.docx')
+    const outputMdPath = path.join(tempDir, 'reverse.md')
+    const optionsPath = path.join(tempDir, 'wrong-mode-options.json')
+    const output = captureOutput()
+
+    await writeDocxFixture(inputDocxPath, '# Reverse Title\n\n- alpha\n- beta')
+    await fsp.writeFile(optionsPath, JSON.stringify({ documentType: 'report' }))
+
+    const exitCode = await runCli(
+      [inputDocxPath, outputMdPath, '--from-docx', '--options', optionsPath],
+      output,
+    )
+
+    expect(exitCode).toBe(1)
+    expect(output.errors.join('\n')).toContain('documentType is not a supported option')
+  })
+
   it('fails when too many positional arguments are given', async () => {
     const output = captureOutput()
 

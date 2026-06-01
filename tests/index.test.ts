@@ -312,12 +312,12 @@ Numerous organizations have reported significant reductions in operational costs
 A survey from IDC indicates that early adopters of AI in retail and consumer services boosted revenue growth by an average of 15% year-over-year. Leading companies such as Amazon and Alibaba leverage recommendation engines powered by machine learning to personalize shopping experiences, resulting in user engagement increases exceeding 20%. Similarly, OpenAI's GPT-based applications have enabled content creators and businesses to generate high-quality text content rapidly, opening new revenue streams.
 
 **Generative AI and Content Creation**
-Generative models like DALL·E for images and GPT-4 for text have demonstrated remarkable capabilities. For instance, DALL·E has been used by marketing agencies to produce customized visual content at scale, reducing creative production costs by approximately 25%. In entertainment, AI-generated music compositions with models like MusicLM are attracting attention for their quality comparable to human composers—highlighting the commercial potential of AI in creative sectors.
+Generative models like DALL·E for images and GPT-4 for text have demonstrated remarkable capabilities. For instance, DALL·E has been used by marketing agencies to produce customized visual content at scale, reducing creative production costs by approximately 25%. In entertainment, AI-generated music compositions with models like MusicLM are attracting attention for their quality comparable to human composers - highlighting the commercial potential of AI in creative sectors.
 
 **Explainability and Regulatory Compliance**
 Organizations adopting explainable AI frameworks report better regulatory compliance outcomes. For example, a financial institution implementing SHAP explanations for credit scoring models observed a 35% reduction in model bias incidents during audits. As regulatory bodies such as the EU's European Data Protection Board emphasize transparency, companies investing in XAI tools are better positioned to meet evolving legal standards and avoid penalties.
 
-"In sectors where decisions directly impact individuals' lives—like lending or hiring—transparency isn't just ethical; it's a regulatory requirement," notes Dr. Maria Lopez, Director of AI Ethics at the Global Institute for Responsible Innovation.
+"In sectors where decisions directly impact individuals' lives - like lending or hiring - transparency isn't just ethical; it's a regulatory requirement," notes Dr. Maria Lopez, Director of AI Ethics at the Global Institute for Responsible Innovation.
 `
     const blob = await convertMarkdownToDocx(markdown)
     expect(blob).toBeInstanceOf(Blob)

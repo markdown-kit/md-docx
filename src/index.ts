@@ -79,10 +79,6 @@ export class MarkdownConversionError extends Error {
   }
 }
 
-type TocPlaceholderParagraph = Paragraph & {
-  __isTocPlaceholder?: boolean
-}
-
 function normalizeStyleInput(style?: Partial<Style>): Partial<Style> | undefined {
   if (!style) {
     return style
@@ -150,11 +146,18 @@ function clampHalfPointSize(size: number, min = 8, max = 144): number {
   return Math.max(min, Math.min(max, Math.round(size)))
 }
 
-function normalizeSectionConfig<T extends SectionConfig>(section?: T): T | undefined {
+function normalizeSectionTemplate(section?: SectionTemplate): SectionTemplate | undefined {
   if (!section) {
     return section
   }
 
+  return {
+    ...section,
+    style: normalizeStyleInput(section.style),
+  }
+}
+
+function normalizeDocumentSection(section: DocumentSection): DocumentSection {
   return {
     ...section,
     style: normalizeStyleInput(section.style),
@@ -247,12 +250,12 @@ function resolveSections(
   options: Options,
   baseStyle: Style,
 ): ResolvedSectionInput[] {
-  const normalizedTemplate = normalizeSectionConfig(options.template)
+  const normalizedTemplate = normalizeSectionTemplate(options.template)
   const sections: DocumentSection[] =
     options.sections && options.sections.length > 0 ? options.sections : [{ markdown }]
 
   return sections.map((section) => {
-    const normalizedSection = normalizeSectionConfig(section) as DocumentSection
+    const normalizedSection = normalizeDocumentSection(section)
     const mergedSectionConfig = mergeSectionConfig(normalizedTemplate, normalizedSection)
     const sectionStyle: Style = {
       ...baseStyle,
@@ -500,13 +503,24 @@ function validateInput(markdown: string, options: Options): void {
     throw new MarkdownConversionError('Invalid markdown input: Markdown must be a string')
   }
 
+  if (
+    options.documentType !== undefined &&
+    options.documentType !== 'document' &&
+    options.documentType !== 'report'
+  ) {
+    throw new MarkdownConversionError(
+      'Invalid documentType: Must be one of "document" or "report"',
+      { documentType: options.documentType },
+    )
+  }
+
   if (!options.sections && markdown.trim().length === 0) {
     throw new MarkdownConversionError('Invalid markdown input: Markdown must be a non-empty string')
   }
 
   validateStyleInput(normalizeStyleInput(options.style), 'options.style')
 
-  const normalizedTemplate = normalizeSectionConfig(options.template)
+  const normalizedTemplate = normalizeSectionTemplate(options.template)
   if (normalizedTemplate) {
     validateSectionConfigInput(normalizedTemplate, 'options.template')
   }
@@ -526,7 +540,7 @@ function validateInput(markdown: string, options: Options): void {
         )
       }
 
-      const normalizedSection = normalizeSectionConfig(section) as DocumentSection
+      const normalizedSection = normalizeDocumentSection(section)
       validateSectionConfigInput(normalizedSection, `options.sections[${index}]`)
     })
   }
@@ -890,13 +904,13 @@ function replaceTocPlaceholders(
   children: Array<Paragraph | Table>,
   tocContent: Paragraph[],
   tocInserted: boolean,
+  tocPlaceholders: WeakSet<Paragraph>,
 ): { children: Array<Paragraph | Table>; tocInserted: boolean } {
   const nextChildren: Array<Paragraph | Table> = []
   let inserted = tocInserted
 
   children.forEach((child) => {
-    const tocChild = child as TocPlaceholderParagraph
-    if (tocChild.__isTocPlaceholder === true) {
+    if (child instanceof Paragraph && tocPlaceholders.has(child)) {
       if (tocContent.length > 0 && !inserted) {
         nextChildren.push(...tocContent)
         inserted = true
@@ -961,9 +975,11 @@ export async function parseToDocxOptions(
       children: Array<Paragraph | Table>
       style: Style
       config: SectionConfig
+      tocPlaceholders: WeakSet<Paragraph>
     }> = []
     const headings: TocHeadingEntry[] = []
     let maxSequenceId = 0
+    const sequenceStarts = new Map<number, number>()
 
     for (const section of resolvedSections) {
       const ast = await parseMarkdownToAst(section.markdown)
@@ -978,19 +994,28 @@ export async function parseToDocxOptions(
       })
 
       maxSequenceId = Math.max(maxSequenceId, renderedModel.maxSequenceId)
+      for (const [sequenceId, start] of renderedModel.sequenceStarts) {
+        sequenceStarts.set(sequenceId, start)
+      }
       headings.push(...renderedModel.headings)
 
       renderedSections.push({
         children: renderedModel.children.length > 0 ? renderedModel.children : [new Paragraph({})],
         style: section.style,
         config: section.config,
+        tocPlaceholders: renderedModel.tocPlaceholders,
       })
     }
 
     const tocContent = buildTocContent(headings, style)
     let tocInserted = false
     const docSections: ISectionOptions[] = renderedSections.map((section) => {
-      const replacedTocChildren = replaceTocPlaceholders(section.children, tocContent, tocInserted)
+      const replacedTocChildren = replaceTocPlaceholders(
+        section.children,
+        tocContent,
+        tocInserted,
+        section.tocPlaceholders,
+      )
       ;({ tocInserted } = replacedTocChildren)
 
       const headers = buildHeaders(section.config.headers, section.style)
@@ -1015,6 +1040,8 @@ export async function parseToDocxOptions(
             format: LevelFormat.DECIMAL,
             text: '%1.',
             alignment: AlignmentType.LEFT,
+            // Honor an ordered list's `start: N` (e.g. a list beginning at 5).
+            start: sequenceStarts.get(i) ?? 1,
             style: {
               paragraph: {
                 indent: { left: 720, hanging: 260 },

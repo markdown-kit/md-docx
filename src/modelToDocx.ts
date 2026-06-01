@@ -32,18 +32,19 @@ export async function modelToDocx(
   children: Array<Paragraph | Table>
   headings: Array<{ text: string; level: number; bookmarkId: string }>
   maxSequenceId: number
+  sequenceStarts: Map<number, number>
+  tocPlaceholders: WeakSet<Paragraph>
 }> {
   const children: Array<Paragraph | Table> = []
   const headings: Array<{ text: string; level: number; bookmarkId: string }> = []
   const documentType = options.documentType ?? 'document'
   const sequenceIdOffset = renderOptions.sequenceIdOffset ?? 0
-
-  type TocPlaceholderParagraph = Paragraph & {
-    __isTocPlaceholder?: boolean
-  }
+  const tocPlaceholders = new WeakSet<Paragraph>()
 
   // Track numbering sequences for nested lists
   let maxSequenceId = 0
+  // Per-sequence starting number for ordered lists that use `start: N`.
+  const sequenceStarts = new Map<number, number>()
 
   function encodeInlineNode(node: {
     value: string
@@ -108,16 +109,51 @@ export async function modelToDocx(
       }
 
       case 'blockquote': {
-        // Combine blockquote children into text
+        // Preserve inline formatting (bold/italic/link/code) by re-encoding to
+        // markdown, and include non-paragraph children (headings, lists, code)
+        // that were previously dropped.
         const quoteText = node.children
           .map((child) => {
-            if (child.type === 'paragraph') {
-              return child.children.map((c) => c.value).join('')
+            switch (child.type) {
+              case 'paragraph':
+              case 'heading':
+                return child.children.map((c) => encodeInlineNode(c)).join('')
+              case 'list':
+                return child.children
+                  .map((listItem, index) => {
+                    const marker = child.ordered ? `${(child.start ?? 1) + index}.` : '-'
+                    const itemText = listItem.children
+                      .map((block) =>
+                        block.type === 'paragraph'
+                          ? block.children.map((c) => encodeInlineNode(c)).join('')
+                          : '',
+                      )
+                      .filter(Boolean)
+                      .join(' ')
+                    return `${marker} ${itemText}`
+                  })
+                  .join('\n')
+              case 'codeBlock':
+                return child.value
+              default:
+                return ''
             }
-            return ''
           })
+          .filter(Boolean)
           .join('\n')
         return [processBlockquote(quoteText, style)]
+      }
+
+      case 'thematicBreak': {
+        // Render a horizontal rule as an empty paragraph with a bottom border.
+        return [
+          new Paragraph({
+            border: {
+              bottom: { color: '999999', space: 1, style: 'single', size: 6 },
+            },
+            spacing: { before: 120, after: 120 },
+          }),
+        ]
       }
 
       case 'image': {
@@ -146,8 +182,8 @@ export async function modelToDocx(
       }
 
       case 'tocPlaceholder': {
-        const placeholder = new Paragraph({}) as TocPlaceholderParagraph
-        placeholder.__isTocPlaceholder = true
+        const placeholder = new Paragraph({})
+        tocPlaceholders.add(placeholder)
         return [placeholder]
       }
 
@@ -158,12 +194,18 @@ export async function modelToDocx(
 
   function renderList(list: DocxListNode, currentLevel: number): Paragraph[] {
     const paragraphs: Paragraph[] = []
-    let itemNumber = 1
+    const startNumber = list.ordered ? (list.start ?? 1) : 1
+    let itemNumber = startNumber
     const adjustedSequenceId = list.sequenceId ? list.sequenceId + sequenceIdOffset : undefined
 
     // Track max sequence ID
     if (adjustedSequenceId && adjustedSequenceId > maxSequenceId) {
       maxSequenceId = adjustedSequenceId
+    }
+
+    // Record a non-default start so the numbering definition begins at it.
+    if (adjustedSequenceId && startNumber !== 1) {
+      sequenceStarts.set(adjustedSequenceId, startNumber)
     }
 
     for (const item of list.children) {
@@ -265,5 +307,5 @@ export async function modelToDocx(
     }
   }
 
-  return { children, headings, maxSequenceId }
+  return { children, headings, maxSequenceId, sequenceStarts, tocPlaceholders }
 }

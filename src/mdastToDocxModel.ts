@@ -30,25 +30,61 @@ export function mdastToDocxModel(root: Root, _style: Style, _options: Options): 
   let numberedListSequenceId = 0
   const listSequenceMap = new Map<List, number>()
 
+  function isHeadingNode(node: Node): node is Heading {
+    return node.type === 'heading'
+  }
+
+  function isParagraphNode(node: Node): node is Paragraph {
+    return node.type === 'paragraph'
+  }
+
+  function isListNode(node: Node): node is List {
+    return node.type === 'list'
+  }
+
+  function isCodeNode(node: Node): node is Code {
+    return node.type === 'code'
+  }
+
+  function isBlockquoteNode(node: Node): node is Blockquote {
+    return node.type === 'blockquote'
+  }
+
+  function isImageNode(node: Node): node is Image {
+    return node.type === 'image'
+  }
+
+  function isTableNode(node: Node): node is Table {
+    return node.type === 'table'
+  }
+
+  function isHtmlNode(node: Node): node is HTML {
+    return node.type === 'html'
+  }
+
   function processNode(node: Node): DocxBlockNode | DocxBlockNode[] | null {
     switch (node.type) {
       case 'heading':
-        return processHeading(node as Heading)
+        return isHeadingNode(node) ? processHeading(node) : null
       case 'paragraph':
-        return processParagraph(node as Paragraph)
+        return isParagraphNode(node) ? processParagraph(node) : null
       case 'list':
-        return processList(node as List)
+        return isListNode(node) ? processList(node) : null
       case 'code':
-        return processCodeBlock(node as Code)
+        return isCodeNode(node) ? processCodeBlock(node) : null
       case 'blockquote':
-        return processBlockquote(node as Blockquote)
+        return isBlockquoteNode(node) ? processBlockquote(node) : null
       case 'image':
-        return processImage(node as Image)
+        return isImageNode(node) ? processImage(node) : null
       case 'table':
-        return processTable(node as Table)
+        return isTableNode(node) ? processTable(node) : null
       case 'html':
+        if (!isHtmlNode(node)) {
+          return null
+        }
+
         // Handle HTML comments and special markers
-        const htmlValue = (node as HTML).value || ''
+        const htmlValue = node.value || ''
         if (htmlValue.trim() === '<!--COMMENT:') {
           // This is a comment marker - we'll handle it specially
           return null // Will be handled by looking ahead
@@ -67,8 +103,8 @@ export function mdastToDocxModel(root: Root, _style: Style, _options: Options): 
         }
         return null
       case 'thematicBreak':
-        // Horizontal rule - skip for now
-        return null
+        // Horizontal rule -> rendered as a bottom-bordered separator paragraph.
+        return { type: 'thematicBreak' }
       default:
         return null
     }
@@ -163,6 +199,7 @@ export function mdastToDocxModel(root: Root, _style: Style, _options: Options): 
       ordered: list.ordered ?? false,
       children: listItems,
       sequenceId: list.ordered ? listSequenceMap.get(list) : undefined,
+      start: list.ordered ? (list.start ?? 1) : undefined,
     }
   }
 
