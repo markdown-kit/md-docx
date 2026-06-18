@@ -50,7 +50,76 @@ const defaultMammothStyleMap = [
   "p[style-id='4'] => h4:fresh",
   "p[style-id='5'] => h5:fresh",
   "p[style-id='6'] => h6:fresh",
+  // Synthetic style names assigned by `buildReverseTransform` so direct run/
+  // paragraph formatting (which mammoth otherwise drops) round-trips back to
+  // markdown: strikethrough, underline, inline code, and code blocks.
+  "r[style-name='MddStrike'] => del",
+  "r[style-name='MddUnderline'] => u",
+  "r[style-name='MddCode'] => code",
+  "p[style-name='MddCodeBlock'] => pre:separator('\\n')",
 ] as const
+
+/** A monospace font implies code in the forward (md→docx) path. */
+function isMonospaceFont(font: unknown): boolean {
+  return typeof font === 'string' && /courier|consolas|monaco|mono/iu.test(font)
+}
+
+/**
+ * Build a mammoth document transform that assigns synthetic style names to
+ * runs/paragraphs carrying direct formatting (strikethrough, underline,
+ * monospace) so the style map can convert them to del/u/code/pre — the inverse
+ * of the md→docx renderer, which applies these as direct formatting rather than
+ * named styles (which mammoth would otherwise silently discard).
+ */
+interface MammothTransforms {
+  run(fn: (run: Record<string, unknown>) => unknown): (document: unknown) => unknown
+  paragraph(fn: (paragraph: Record<string, unknown>) => unknown): (document: unknown) => unknown
+}
+
+// mammoth.transforms is a documented runtime API but is absent from the bundled
+// type definitions; this narrowed interop access is justified and guarded.
+const mammothTransforms = (mammoth as unknown as { transforms?: MammothTransforms }).transforms
+
+function buildReverseTransform(): (document: unknown) => unknown {
+  if (!mammothTransforms) {
+    return (document: unknown) => document
+  }
+
+  const runTransform = mammothTransforms.run((run: Record<string, unknown>) => {
+    if (run.styleName) {
+      return run
+    }
+    if (run.isStrikethrough) {
+      return { ...run, styleName: 'MddStrike' }
+    }
+    if (run.isUnderline) {
+      return { ...run, styleName: 'MddUnderline' }
+    }
+    if (isMonospaceFont(run.font)) {
+      return { ...run, styleName: 'MddCode' }
+    }
+    return run
+  })
+
+  const paragraphTransform = mammothTransforms.paragraph((paragraph: Record<string, unknown>) => {
+    if (paragraph.styleName) {
+      return paragraph
+    }
+    const children = Array.isArray(paragraph.children) ? paragraph.children : []
+    const runs = children.filter(
+      (child): child is Record<string, unknown> => isObjectRecord(child) && child.type === 'run',
+    )
+    if (
+      runs.length > 0 &&
+      runs.every((run) => isMonospaceFont(run.font) || run.styleName === 'MddCode')
+    ) {
+      return { ...paragraph, styleName: 'MddCodeBlock' }
+    }
+    return paragraph
+  })
+
+  return (document: unknown) => paragraphTransform(runTransform(document))
+}
 
 const defaultTurndownOptions: DocxToMarkdownTurndownOptions = {
   headingStyle: 'atx',
@@ -112,6 +181,12 @@ function createTurndownService(options: DocxToMarkdownOptions): TurndownService 
     ...options.turndown,
   })
   turndown.use(gfm)
+  // Underline (`<u>`) has no standard markdown; round-trip it to the `++text++`
+  // syntax the md→docx renderer uses for underline.
+  turndown.addRule('mddUnderline', {
+    filter: ['u'],
+    replacement: (content: string) => (content ? `++${content}++` : ''),
+  })
   return turndown
 }
 
@@ -150,6 +225,9 @@ export async function convertDocxToMarkdown(
         ignoreEmptyParagraphs:
           validatedOptions.mammoth?.preserveEmptyParagraphs === true ? false : true,
         convertImage: mammoth.images.dataUri,
+        // Surface direct strike/underline/monospace formatting as styled HTML so
+        // it round-trips back to markdown (mammoth drops it otherwise).
+        transformDocument: buildReverseTransform(),
       },
     )
 

@@ -192,8 +192,8 @@ export async function modelToDocx(
     }
   }
 
-  function renderList(list: DocxListNode, currentLevel: number): Paragraph[] {
-    const paragraphs: Paragraph[] = []
+  function renderList(list: DocxListNode, currentLevel: number): Array<Paragraph | Table> {
+    const nodes: Array<Paragraph | Table> = []
     const startNumber = list.ordered ? (list.start ?? 1) : 1
     let itemNumber = startNumber
     const adjustedSequenceId = list.sequenceId ? list.sequenceId + sequenceIdOffset : undefined
@@ -209,74 +209,82 @@ export async function modelToDocx(
     }
 
     for (const item of list.children) {
-      // Render list item content
-      const itemParagraphs = renderListItem(
-        item,
-        list.ordered,
-        currentLevel,
-        adjustedSequenceId,
-        itemNumber,
+      nodes.push(
+        ...renderListItem(item, list.ordered, currentLevel, adjustedSequenceId, itemNumber),
       )
-      paragraphs.push(...itemParagraphs)
       itemNumber++
     }
 
-    return paragraphs
+    return nodes
   }
 
+  /**
+   * Render one list item. Only the FIRST paragraph receives the list marker;
+   * subsequent paragraphs (loose list items) render as continuation paragraphs
+   * without a marker so they do not create spurious extra numbers/bullets.
+   * Non-paragraph block children (nested lists, code blocks, tables,
+   * blockquotes) are preserved rather than dropped.
+   */
   function renderListItem(
     item: DocxListItemNode,
     isOrdered: boolean,
     level: number,
     sequenceId: number | undefined,
     itemNumber: number,
-  ): Paragraph[] {
-    const paragraphs: Paragraph[] = []
+  ): Array<Paragraph | Table> {
+    const nodes: Array<Paragraph | Table> = []
+    let markerEmitted = false
 
-    // Process children of list item
     for (const child of item.children) {
       if (child.type === 'list') {
-        // Nested list - render recursively
-        const nestedParagraphs = renderList(child, level + 1)
-        paragraphs.push(...nestedParagraphs)
+        nodes.push(...renderList(child, level + 1))
       } else if (child.type === 'paragraph') {
-        // Paragraph content - render as list item
         const paragraphText = child.children.map((c) => encodeInlineNode(c)).join('')
 
-        // Use processListItem helper
-        const listItemConfig = {
-          text: paragraphText,
-          isNumbered: isOrdered,
-          listNumber: itemNumber,
-          sequenceId: sequenceId ?? 1,
-          level: level,
+        if (!markerEmitted) {
+          // First paragraph: the actual list item with its number/bullet.
+          nodes.push(
+            processListItem(
+              {
+                text: paragraphText,
+                isNumbered: isOrdered,
+                listNumber: itemNumber,
+                sequenceId: sequenceId ?? 1,
+                level,
+              },
+              style,
+            ),
+          )
+          markerEmitted = true
+        } else {
+          // Continuation paragraph: no list marker and no numbering, so loose
+          // list items do not produce spurious extra numbers/bullets.
+          nodes.push(processParagraph(paragraphText, style))
         }
-        paragraphs.push(processListItem(listItemConfig, style))
       } else {
-        // Other block types - render normally but they'll appear as part of list item
-        const rendered = renderBlockNode(child, level)
-        // Filter out Tables - list items should only contain Paragraphs
-        for (const item of rendered) {
-          if (item instanceof Paragraph) {
-            paragraphs.push(item)
-          }
-        }
+        // Other block content (code blocks, tables, blockquotes) — preserve it
+        // (previously tables were silently dropped).
+        nodes.push(...renderBlockNode(child, level))
       }
     }
 
-    // If no paragraphs were created, create an empty list item
-    if (paragraphs.length === 0) {
-      const listItemConfig = {
-        text: '',
-        isNumbered: isOrdered,
-        listNumber: itemNumber,
-        sequenceId: sequenceId ?? 1,
-        level: level,
-      }
-      paragraphs.push(processListItem(listItemConfig, style))
+    // Ensure every item is visible even if it had no paragraph child.
+    if (!markerEmitted && nodes.length === 0) {
+      nodes.push(
+        processListItem(
+          {
+            text: '',
+            isNumbered: isOrdered,
+            listNumber: itemNumber,
+            sequenceId: sequenceId ?? 1,
+            level,
+          },
+          style,
+        ),
+      )
     }
 
-    return paragraphs
+    return nodes
   }
 
   // Process all top-level nodes

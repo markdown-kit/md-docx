@@ -114,7 +114,7 @@
     ],
     "typescript/ban-tslint-comment": "error",
     "typescript/consistent-generic-constructors": "error",
-    "typescript/": ["error", "record"],
+    "typescript/consistent-indexed-object-style": ["error", "record"],
     "typescript/consistent-type-assertions": "error",
     "typescript/consistent-type-definitions": ["error", "interface"],
     "typescript/consistent-type-imports": ["error", { "fixStyle": "separate-type-imports" }],
@@ -228,7 +228,9 @@
       "rules": {
         "typescript/no-explicit-any": "off",
         "no-unused-vars": "off",
-        "promise/always-return": "off"
+        "promise/always-return": "off",
+        "vitest/no-standalone-expect": "off",
+        "vitest/expect-expect": "off"
       }
     },
     {
