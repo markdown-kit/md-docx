@@ -77,7 +77,10 @@ export type SectionPageNumberSeparator = 'hyphen' | 'period' | 'colon' | 'emDash
 
 export interface HeaderFooterContent {
   /**
-   * Optional plain text rendered before page number fields.
+   * Optional plain text. Rendered before the page number field selected by
+   * `pageNumberDisplay`, unless it contains the `{{page}}` token, in which case
+   * every token is replaced by an inline PAGE field and no trailing field is
+   * appended (an explicit `pageNumberDisplay` still appends one).
    */
   text?: string
   /**

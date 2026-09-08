@@ -633,18 +633,41 @@ function buildPageNumberChildren(
   }
 }
 
+/**
+ * Inline page-number placeholder accepted inside header/footer `text`
+ * (e.g. `Page {{page}} | Confidential`). Each occurrence is rendered as a live
+ * PAGE field at that exact position.
+ */
+const PAGE_NUMBER_TOKEN = '{{page}}'
+
 function createHeaderFooterParagraph(
   slot: NonNullable<HeaderFooterSlot>,
   style: Style,
   fallbackDisplay: SectionPageNumberDisplay,
   fallbackAlignment: AlignmentOption,
 ): Paragraph {
-  const display = slot.pageNumberDisplay ?? fallbackDisplay
   const alignment = resolveAlignment(slot.alignment, fallbackAlignment)
   const runChildren: Array<string | (typeof PageNumber)[keyof typeof PageNumber]> = []
   const text = slot.text ?? ''
+  const hasInlinePageNumber = text.includes(PAGE_NUMBER_TOKEN)
+  // An inline token already places the page number; only an explicit
+  // pageNumberDisplay on the slot still appends a trailing field.
+  const display = slot.pageNumberDisplay ?? (hasInlinePageNumber ? 'none' : fallbackDisplay)
 
-  if (text.length > 0) {
+  if (hasInlinePageNumber) {
+    const parts = text.split(PAGE_NUMBER_TOKEN)
+    parts.forEach((part, index) => {
+      if (part.length > 0) {
+        runChildren.push(part)
+      }
+      if (index < parts.length - 1) {
+        runChildren.push(PageNumber.CURRENT)
+      }
+    })
+    if (display !== 'none') {
+      runChildren.push(' ')
+    }
+  } else if (text.length > 0) {
     runChildren.push(text)
     if (display !== 'none') {
       runChildren.push(' ')

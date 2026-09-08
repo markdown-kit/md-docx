@@ -19,14 +19,18 @@ export async function writeBlobDocx(blob: Blob, filename: string): Promise<strin
   return outputPath
 }
 
-export async function readDocumentXml(blob: Blob): Promise<string> {
+export async function readDocxEntry(blob: Blob, entryPath: string): Promise<string> {
   const buffer = await blob.arrayBuffer()
   const zip = await JSZip.loadAsync(Buffer.from(buffer))
-  const documentXml = zip.file('word/document.xml')
+  const entry = zip.file(entryPath)
 
-  if (!documentXml) {
-    throw new Error('word/document.xml not found in DOCX')
+  if (!entry) {
+    throw new Error(`${entryPath} not found in DOCX`)
   }
 
-  return documentXml.async('string')
+  return entry.async('string')
+}
+
+export async function readDocumentXml(blob: Blob): Promise<string> {
+  return readDocxEntry(blob, 'word/document.xml')
 }

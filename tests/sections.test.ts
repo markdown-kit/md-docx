@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { convertMarkdownToDocx, MarkdownConversionError, parseToDocxOptions } from '../src/index'
 import type { Options } from '../src/types'
+import { readDocxEntry } from './testUtils'
 
 const outputDir = path.join(process.cwd(), 'test-output')
 
@@ -271,6 +272,31 @@ describe('sections API', () => {
         ],
       }),
     ).rejects.toThrow('Invalid header/footer alignment')
+  })
+
+  it('renders {{page}} inline in header/footer text and suppresses the trailing field', async () => {
+    const blob = await convertMarkdownToDocx('# Body\n\nContent.', {
+      template: {
+        headers: {
+          default: { text: 'Acme | Page {{page}} | Confidential', alignment: 'CENTER' },
+        },
+        footers: {
+          default: { text: 'Questions? billing@acme.com', pageNumberDisplay: 'none' },
+        },
+      },
+    })
+
+    const headerXml = await readDocxEntry(blob, 'word/header1.xml')
+    const footerXml = await readDocxEntry(blob, 'word/footer1.xml')
+
+    // The literal token must not survive; a PAGE field must sit between the text parts.
+    expect(headerXml).not.toContain('{{page}}')
+    expect(headerXml).toMatch(/Acme \| Page <\/w:t>[\s\S]*PAGE[\s\S]*<w:t[^>]*> \| Confidential/u)
+    expect((headerXml.match(/w:instrText/gu) ?? []).length).toBe(2)
+
+    // Footer text without a token and with display 'none' carries no PAGE field.
+    expect(footerXml).toContain('Questions? billing@acme.com')
+    expect(footerXml).not.toMatch(/PAGE/u)
   })
 
   it('throws for invalid titlePage type', async () => {
