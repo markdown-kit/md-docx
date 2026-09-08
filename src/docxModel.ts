@@ -10,6 +10,8 @@ export interface DocxTextNode {
   italic?: boolean
   underline?: boolean
   strikethrough?: boolean
+  superScript?: boolean
+  subScript?: boolean
   code?: boolean
   link?: string
 }

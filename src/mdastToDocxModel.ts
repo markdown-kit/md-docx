@@ -271,14 +271,34 @@ export function mdastToDocxModel(root: Root, _style: Style, _options: Options): 
 
   function processInlineNodes(nodes: PhrasingContent[]): DocxTextNode[] {
     const result: DocxTextNode[] = []
+    // Inline <sup>/<sub> HTML tags arrive as separate `html` nodes around their
+    // text; track them so the enclosed text becomes a super/subscript run.
+    let superScript = false
+    let subScript = false
+    const scripted = (node: DocxTextNode): DocxTextNode => ({
+      ...node,
+      ...(superScript ? { superScript: true } : {}),
+      ...(subScript ? { subScript: true } : {}),
+    })
 
     for (const node of nodes) {
       switch (node.type) {
+        case 'html': {
+          const tag = node.value.trim().toLowerCase()
+          if (tag === '<sup>') superScript = true
+          else if (tag === '</sup>') superScript = false
+          else if (tag === '<sub>') subScript = true
+          else if (tag === '</sub>') subScript = false
+          else result.push({ type: 'text', value: node.value })
+          break
+        }
         case 'text':
-          result.push({
-            type: 'text',
-            value: node.value,
-          })
+          result.push(
+            scripted({
+              type: 'text',
+              value: node.value,
+            }),
+          )
           break
         case 'emphasis':
           const emphasisChildren = processInlineNodes(node.children)

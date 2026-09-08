@@ -299,6 +299,15 @@ describe('sections API', () => {
     expect(footerXml).not.toMatch(/PAGE/u)
   })
 
+  it('renders multi-line header text as separate lines', async () => {
+    const blob = await convertMarkdownToDocx('# Body\n\nContent.', {
+      template: { headers: { default: { text: 'Acme Corp\nConfidential' } } },
+    })
+    const headerXml = await readDocxEntry(blob, 'word/header1.xml')
+    expect(headerXml).toMatch(/Acme Corp<\/w:t>[\s\S]*<w:br\/>[\s\S]*Confidential/u)
+    expect(headerXml).not.toMatch(/Acme Corp\nConfidential/u)
+  })
+
   it('throws for invalid titlePage type', async () => {
     await expect(
       parseToDocxOptions('', {

@@ -680,17 +680,39 @@ function createHeaderFooterParagraph(
     runChildren.push('')
   }
 
+  // A newline inside a run is rendered as a space by Word; split lines into
+  // separate runs joined by explicit line breaks.
+  const lineGroups: Array<typeof runChildren> = [[]]
+  const currentGroup = () => lineGroups.at(-1) as typeof runChildren
+  for (const child of runChildren) {
+    if (typeof child !== 'string' || !child.includes('\n')) {
+      currentGroup().push(child)
+      continue
+    }
+    const parts = child.split('\n')
+    parts.forEach((part, index) => {
+      if (index > 0) {
+        lineGroups.push([])
+      }
+      if (part.length > 0) {
+        currentGroup().push(part)
+      }
+    })
+  }
+
   return new Paragraph({
     alignment,
     bidirectional: style.direction === 'RTL',
-    children: [
-      new TextRun({
-        children: runChildren,
-        size: style.paragraphSize ?? 24,
-        font: resolveFontFamily(style),
-        rightToLeft: style.direction === 'RTL',
-      }),
-    ],
+    children: lineGroups.map(
+      (children, index) =>
+        new TextRun({
+          children: children.length > 0 ? children : [''],
+          ...(index > 0 ? { break: 1 } : {}),
+          size: style.paragraphSize ?? 24,
+          font: resolveFontFamily(style),
+          rightToLeft: style.direction === 'RTL',
+        }),
+    ),
   })
 }
 

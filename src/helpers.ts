@@ -611,6 +611,8 @@ export function processFormattedText(
   let isUnderline = false
   let isStrikethrough = false
   let isInlineCode = false
+  let isSuperScript = false
+  let isSubScript = false
 
   // Track unclosed markers to reset at end if needed
   let boldStart = -1
@@ -625,6 +627,8 @@ export function processFormattedText(
       bold: isBold,
       italics: isItalic || runDefaults.italics === true,
       strike: isStrikethrough,
+      superScript: isSuperScript,
+      subScript: isSubScript,
       underline: isUnderline ? { type: 'single' } : undefined,
       color: '000000',
       size: style?.paragraphSize ?? 24,
@@ -661,6 +665,22 @@ export function processFormattedText(
       // If not a recognized escape sequence, treat normally
       currentText += line[j]
       continue
+    }
+
+    // Inline <sup>/<sub> tags toggle super/subscript runs.
+    if (!isInlineCode && line[j] === '<') {
+      const tagMatch = /^<(\/?)(sup|sub)>/i.exec(line.slice(j, j + 6))
+      if (tagMatch) {
+        flushCurrentText()
+        const enable = tagMatch[1] === ''
+        if (tagMatch[2].toLowerCase() === 'sup') {
+          isSuperScript = enable
+        } else {
+          isSubScript = enable
+        }
+        j += tagMatch[0].length - 1
+        continue
+      }
     }
 
     // Handle inline links [text](url) - only when not in inline code
@@ -713,6 +733,8 @@ export function processFormattedText(
                 bold: isBold,
                 italics: isItalic || runDefaults.italics === true,
                 strike: isStrikethrough,
+                superScript: isSuperScript,
+                subScript: isSubScript,
                 size: style?.paragraphSize ?? 24,
                 font: fontFamily,
                 rightToLeft: style?.direction === 'RTL',

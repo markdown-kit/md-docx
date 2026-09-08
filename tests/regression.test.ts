@@ -41,4 +41,18 @@ COMMENT: reviewer note`
     expect(xml).toContain('Comment: reviewer note')
     expect(xml).toContain('Primary Heading')
   })
+
+  it('renders inline <sup>/<sub> tags as superscript and subscript runs', async () => {
+    const blob = await convertMarkdownToDocx(
+      'Water is H<sub>2</sub>O and the 2<sup>nd</sup> **bold<sup>x</sup>** clause.\n\n> Quote E = mc<sup>2</sup>\n',
+    )
+    const xml = await readDocumentXml(blob)
+    expect(xml).toMatch(/<w:vertAlign w:val="subscript"\/>[\s\S]{0,120}<w:t[^>]*>2<\/w:t>/u)
+    expect(xml).toMatch(/<w:vertAlign w:val="superscript"\/>[\s\S]{0,120}<w:t[^>]*>nd<\/w:t>/u)
+    expect(xml).toMatch(
+      /<w:b\/>[\s\S]{0,220}<w:vertAlign w:val="superscript"\/>[\s\S]{0,120}<w:t[^>]*>x<\/w:t>/u,
+    )
+    expect(xml).toMatch(/<w:vertAlign w:val="superscript"\/>[\s\S]{0,160}<w:t[^>]*>2<\/w:t>/u)
+    expect(xml).not.toMatch(/&lt;sup&gt;|<sup>/u)
+  })
 })

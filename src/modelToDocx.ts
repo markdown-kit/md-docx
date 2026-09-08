@@ -52,6 +52,8 @@ export async function modelToDocx(
     italic?: boolean
     underline?: boolean
     strikethrough?: boolean
+    superScript?: boolean
+    subScript?: boolean
     code?: boolean
     link?: string
   }): string {
@@ -61,6 +63,11 @@ export async function modelToDocx(
 
     let text = node.link ? `[${node.value}](${node.link})` : node.value
 
+    if (node.superScript) {
+      text = `<sup>${text}</sup>`
+    } else if (node.subScript) {
+      text = `<sub>${text}</sub>`
+    }
     if (node.strikethrough) {
       text = `~~${text}~~`
     }
@@ -74,11 +81,41 @@ export async function modelToDocx(
     return text
   }
 
+  /**
+   * Encode a run of inline nodes to markdown-like text. Adjacent nodes that
+   * share an outer marker (e.g. bold text followed by bold superscript) would
+   * otherwise produce `****`, which the inline parser reads as bold+italic
+   * toggles; matching closing/opening markers are collapsed instead.
+   */
+  function encodeInlineNodes(nodes: Array<Parameters<typeof encodeInlineNode>[0]>): string {
+    let out = ''
+    for (const part of nodes.map((c) => encodeInlineNode(c))) {
+      const trailingStars = /\*+$/.exec(out)?.[0].length ?? 0
+      const leadingStars = /^\*+/.exec(part)?.[0].length ?? 0
+      if (trailingStars > 0 && trailingStars === leadingStars && out.length > trailingStars) {
+        out = out.slice(0, -trailingStars) + part.slice(leadingStars)
+        continue
+      }
+      let merged = false
+      for (const marker of ['~~', '++']) {
+        if (out.endsWith(marker) && part.startsWith(marker) && out.length > marker.length) {
+          out = out.slice(0, -marker.length) + part.slice(marker.length)
+          merged = true
+          break
+        }
+      }
+      if (!merged) {
+        out += part
+      }
+    }
+    return out
+  }
+
   function renderBlockNode(node: DocxBlockNode, listLevel = 0): Array<Paragraph | Table> {
     switch (node.type) {
       case 'heading': {
         // Re-encode inline formatting into markdown-like syntax for helpers.
-        const headingText = node.children.map((c) => encodeInlineNode(c)).join('')
+        const headingText = encodeInlineNodes(node.children)
 
         const headingLine = `${'#'.repeat(node.level)} ${headingText}`
         const config = {
@@ -96,7 +133,7 @@ export async function modelToDocx(
       }
 
       case 'paragraph': {
-        const paragraphText = node.children.map((c) => encodeInlineNode(c)).join('')
+        const paragraphText = encodeInlineNodes(node.children)
         return [processParagraph(paragraphText, style)]
       }
 
@@ -117,16 +154,14 @@ export async function modelToDocx(
             switch (child.type) {
               case 'paragraph':
               case 'heading':
-                return child.children.map((c) => encodeInlineNode(c)).join('')
+                return encodeInlineNodes(child.children)
               case 'list':
                 return child.children
                   .map((listItem, index) => {
                     const marker = child.ordered ? `${(child.start ?? 1) + index}.` : '-'
                     const itemText = listItem.children
                       .map((block) =>
-                        block.type === 'paragraph'
-                          ? block.children.map((c) => encodeInlineNode(c)).join('')
-                          : '',
+                        block.type === 'paragraph' ? encodeInlineNodes(block.children) : '',
                       )
                       .filter(Boolean)
                       .join(' ')
@@ -164,10 +199,8 @@ export async function modelToDocx(
 
       case 'table': {
         const tableData = {
-          headers: node.headers.map((cells) => cells.map((c) => encodeInlineNode(c)).join('')),
-          rows: node.rows.map((row) =>
-            row.map((cells) => cells.map((c) => encodeInlineNode(c)).join('')),
-          ),
+          headers: node.headers.map((cells) => encodeInlineNodes(cells)),
+          rows: node.rows.map((row) => row.map((cells) => encodeInlineNodes(cells))),
           align: node.align,
         }
         return [processTable(tableData, documentType, style)]
@@ -239,7 +272,7 @@ export async function modelToDocx(
       if (child.type === 'list') {
         nodes.push(...renderList(child, level + 1))
       } else if (child.type === 'paragraph') {
-        const paragraphText = child.children.map((c) => encodeInlineNode(c)).join('')
+        const paragraphText = encodeInlineNodes(child.children)
 
         if (!markerEmitted) {
           // First paragraph: the actual list item with its number/bullet.
