@@ -1104,11 +1104,18 @@ export async function parseToDocxOptions(
     const heading4StyleSize = clampHalfPointSize(style.heading4Size ?? style.titleSize - 12)
     const heading5StyleSize = clampHalfPointSize(style.heading5Size ?? style.titleSize - 16)
 
+    // Word only shows `even` headers/footers when the document enables
+    // even/odd pages; without the flag every page uses the default slot.
+    const usesEvenPages = docSections.some(
+      (section) => section.headers?.even !== undefined || section.footers?.even !== undefined,
+    )
+
     // Create the document with appropriate settings
     const docxOptions: IPropertiesOptions = {
       numbering: {
         config: numberingConfigs,
       },
+      ...(usesEvenPages ? { evenAndOddHeaderAndFooters: true } : {}),
       sections: docSections,
       styles: {
         paragraphStyles: [

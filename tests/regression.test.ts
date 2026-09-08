@@ -55,4 +55,19 @@ COMMENT: reviewer note`
     expect(xml).toMatch(/<w:vertAlign w:val="superscript"\/>[\s\S]{0,160}<w:t[^>]*>2<\/w:t>/u)
     expect(xml).not.toMatch(/&lt;sup&gt;|<sup>/u)
   })
+
+  it('sizes list item text with listItemSize rather than paragraphSize', async () => {
+    const blob = await convertMarkdownToDocx('Body text\n\n- Bullet item\n\n1. Numbered item\n', {
+      style: { paragraphSize: 24, listItemSize: 18 },
+    })
+    const xml = await readDocumentXml(blob)
+    const runSize = (text: string): string | undefined =>
+      xml
+        .split('<w:r>')
+        .find((run) => run.includes(`>${text}<`))
+        ?.match(/<w:sz w:val="(\d+)"\/>/u)?.[1]
+    expect(runSize('Body text')).toBe('24')
+    expect(runSize('Bullet item')).toBe('18')
+    expect(runSize('Numbered item')).toBe('18')
+  })
 })

@@ -450,8 +450,11 @@ export function processListItem(config: ListItemConfig, style: Style): Paragraph
 
   const listLevel = config.level ?? 0
 
+  // List items use `listItemSize` in place of the paragraph size.
+  const listItemStyle: Style = { ...style, paragraphSize: style.listItemSize ?? 24 }
+
   // Process the main text with formatting
-  const children = processFormattedText(config.text, style)
+  const children = processFormattedText(config.text, listItemStyle)
 
   // If there's bold text on the next line, add it with a line break
   if (config.boldText) {

@@ -99,6 +99,8 @@ Markdown → DOCX example:
 
 Header/footer `text` may contain `{{page}}`; each occurrence is rendered as a live page-number field at that position (for example `Page {{page}} | Confidential`). When the token is present the automatic trailing page number is not appended unless the slot sets `pageNumberDisplay` explicitly.
 
+Slots are `default`, `first` and `even`. Configuring an `even` header or footer turns on Word's even/odd page setting for the document, so even-numbered pages use that slot and odd pages the `default` one; `first` applies to the section's first page when `titlePage` is set.
+
 DOCX → Markdown example:
 
 ```json

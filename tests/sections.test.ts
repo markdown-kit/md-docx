@@ -299,6 +299,27 @@ describe('sections API', () => {
     expect(footerXml).not.toMatch(/PAGE/u)
   })
 
+  it('enables even/odd pages when an even header or footer is configured', async () => {
+    const evenOptions = await parseToDocxOptions('# Doc', {
+      template: {
+        headers: { default: { text: 'Odd pages' }, even: { text: 'Even pages' } },
+      },
+    })
+    expect(evenOptions.evenAndOddHeaderAndFooters).toBe(true)
+    expect(evenOptions.sections[0].headers?.even).toBeDefined()
+
+    const defaultOnly = await parseToDocxOptions('# Doc', {
+      template: { headers: { default: { text: 'Every page' } } },
+    })
+    expect(defaultOnly.evenAndOddHeaderAndFooters).toBeUndefined()
+
+    const blob = await convertMarkdownToDocx('# Doc', {
+      template: { footers: { default: { text: 'Odd' }, even: { text: 'Even' } } },
+    })
+    const settingsXml = await readDocxEntry(blob, 'word/settings.xml')
+    expect(settingsXml).toContain('<w:evenAndOddHeaders')
+  })
+
   it('renders multi-line header text as separate lines', async () => {
     const blob = await convertMarkdownToDocx('# Body\n\nContent.', {
       template: { headers: { default: { text: 'Acme Corp\nConfidential' } } },
