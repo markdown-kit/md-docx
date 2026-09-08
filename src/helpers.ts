@@ -532,17 +532,23 @@ export function processBlockquote(text: string, style: Style): Paragraph {
     }
   }
 
+  // Blockquote text arrives as markdown-encoded inline content (bold, links,
+  // code, …) with `\n` between the quote's lines. Render each line through the
+  // shared inline formatter so markers become formatting instead of literal
+  // asterisks/brackets, and keep line boundaries as explicit breaks.
+  const blockquoteStyle: Style = { ...style, paragraphSize: style.blockquoteSize ?? 24 }
+  const children: Array<TextRun | ExternalHyperlink> = []
+  text.split('\n').forEach((line, index) => {
+    if (index > 0) {
+      children.push(new TextRun({ break: 1, font: fontFamily }))
+    }
+    for (const run of processFormattedText(line, blockquoteStyle, { italics: true })) {
+      children.push(run)
+    }
+  })
+
   return new Paragraph({
-    children: [
-      new TextRun({
-        text: text,
-        italics: true,
-        color: '000000',
-        size: style.blockquoteSize ?? 24, // Use custom blockquote size if provided
-        font: fontFamily,
-        rightToLeft: style.direction === 'RTL',
-      }),
-    ],
+    children,
     indent: {
       left: 720, // 0.5 inch indent
     },
@@ -596,6 +602,7 @@ export function processComment(text: string, style: Style): Paragraph {
 export function processFormattedText(
   line: string,
   style?: Style,
+  runDefaults: { italics?: boolean } = {},
 ): Array<TextRun | ExternalHyperlink> {
   const textRuns: Array<TextRun | ExternalHyperlink> = []
   let currentText = ''
@@ -616,7 +623,7 @@ export function processFormattedText(
     return new TextRun({
       text: value,
       bold: isBold,
-      italics: isItalic,
+      italics: isItalic || runDefaults.italics === true,
       strike: isStrikethrough,
       underline: isUnderline ? { type: 'single' } : undefined,
       color: '000000',
@@ -704,7 +711,7 @@ export function processFormattedText(
                 color: '0000FF',
                 underline: { type: 'single' },
                 bold: isBold,
-                italics: isItalic,
+                italics: isItalic || runDefaults.italics === true,
                 strike: isStrikethrough,
                 size: style?.paragraphSize ?? 24,
                 font: fontFamily,
