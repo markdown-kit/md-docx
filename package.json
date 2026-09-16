@@ -71,10 +71,10 @@
   "dependencies": {
     "docx": "^9.7.1",
     "file-saver": "^2.0.5",
-    "mammoth": "^1.12.1",
+    "mammoth": "^1.12.3",
     "mdast-util-find-and-replace": "^3.0.2",
-    "oxfmt": "^0.63.0",
-    "oxlint": "^1.78.0",
+    "oxfmt": "^0.68.0",
+    "oxlint": "^1.83.0",
     "oxlint-tsgolint": "^7.0.2001",
     "remark": "^15.0.1",
     "remark-gfm": "^4.0.1",
@@ -85,16 +85,16 @@
     "unist-util-visit": "^5.1.0"
   },
   "devDependencies": {
-    "@entro314labs/release-kit": "^1.0.2",
+    "@entro314labs/release-kit": "^2.9.4",
     "@types/file-saver": "^2.0.7",
     "@types/mdast": "^4.0.4",
-    "@types/node": "^26.2.0",
+    "@types/node": "^26.6.1",
     "@types/turndown": "^5.0.6",
-    "@vitest/coverage-v8": "^4.1.10",
-    "jszip": "^3.10.1",
+    "@vitest/coverage-v8": "^5.0.1",
+    "jszip": "^3.10.2",
     "rimraf": "^6.1.3",
     "typescript": "next",
-    "vitest": "^4.1.10"
+    "vitest": "^5.0.1"
   },
   "engines": {
     "node": ">=24.19.0"
