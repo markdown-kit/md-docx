@@ -46,6 +46,17 @@ export async function modelToDocx(
   // Per-sequence starting number for ordered lists that use `start: N`.
   const sequenceStarts = new Map<number, number>()
 
+  /**
+   * Backslash-escape the characters the helpers' inline parsers read as markup
+   * (`\\`, `*`, `` ` ``, `[`, `]`, `~`) so literal text from the AST is not
+   * re-parsed as formatting. `+` is deliberately left alone: `++text++`
+   * underline only exists as plain text (remark has no node for it), so
+   * escaping it would disable that syntax.
+   */
+  function escapeInlineText(value: string): string {
+    return value.replace(/[\\*`[\]~]/gu, '\\$&')
+  }
+
   function encodeInlineNode(node: {
     value: string
     bold?: boolean
@@ -58,10 +69,13 @@ export async function modelToDocx(
     link?: string
   }): string {
     if (node.code) {
-      return `\`${node.value}\``
+      return `\`${escapeInlineText(node.value)}\``
     }
 
-    let text = node.link ? `[${node.value}](${node.link})` : node.value
+    // The helpers' link scanner ends the URL at the first `)`, so encode it.
+    let text = node.link
+      ? `[${escapeInlineText(node.value)}](${node.link.replaceAll(')', '%29')})`
+      : escapeInlineText(node.value)
 
     if (node.superScript) {
       text = `<sup>${text}</sup>`
@@ -90,7 +104,13 @@ export async function modelToDocx(
   function encodeInlineNodes(nodes: Array<Parameters<typeof encodeInlineNode>[0]>): string {
     let out = ''
     for (const part of nodes.map((c) => encodeInlineNode(c))) {
-      const trailingStars = /\*+$/.exec(out)?.[0].length ?? 0
+      let trailingStars = /\*+$/.exec(out)?.[0].length ?? 0
+      // An odd run of backslashes before the stars escapes the first one.
+      const precedingBackslashes =
+        /\\*$/.exec(out.slice(0, out.length - trailingStars))?.[0].length ?? 0
+      if (precedingBackslashes % 2 === 1) {
+        trailingStars--
+      }
       const leadingStars = /^\*+/.exec(part)?.[0].length ?? 0
       if (trailingStars > 0 && trailingStars === leadingStars && out.length > trailingStars) {
         out = out.slice(0, -trailingStars) + part.slice(leadingStars)

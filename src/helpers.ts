@@ -195,7 +195,15 @@ function processFormattedTextForHeading(text: string, fontSize: number, style?: 
     // Handle escaped characters
     if (text[j] === '\\' && j + 1 < text.length) {
       const nextChar = text[j + 1]
-      if (nextChar === '*' || nextChar === '+' || nextChar === '~' || nextChar === '\\') {
+      if (
+        nextChar === '*' ||
+        nextChar === '`' ||
+        nextChar === '\\' ||
+        nextChar === '[' ||
+        nextChar === ']' ||
+        nextChar === '+' ||
+        nextChar === '~'
+      ) {
         currentText += nextChar
         j++ // Skip the escaped character
         continue
@@ -240,7 +248,11 @@ function processFormattedTextForHeading(text: string, fontSize: number, style?: 
 
     // Handle underline with ++ markers
     if (j + 1 < text.length && text[j] === '+' && text[j + 1] === '+') {
-      const canToggle = isUnderline || hasUnescapedMarker(text, '++', j + 2)
+      // Flanking rule: an opener must be followed by non-whitespace and a closer
+      // preceded by it, so "C++ and C++" stays literal.
+      const canToggle = isUnderline
+        ? /\S/u.test(text[j - 1] ?? '')
+        : /\S/u.test(text[j + 2] ?? '') && hasUnescapedMarker(text, '++', j + 2)
       if (!canToggle) {
         currentText += '++'
         j++
@@ -722,7 +734,7 @@ export function processFormattedText(
         flushCurrentText()
 
         // Extract link text and URL
-        const linkText = line.slice(j + 1, closeBracket)
+        const linkText = line.slice(j + 1, closeBracket).replace(/\\([*`\\[\]+~])/gu, '$1')
         const linkUrl = line.slice(openParen + 1, closeParen)
 
         // Create hyperlink
@@ -812,7 +824,11 @@ export function processFormattedText(
 
     // Handle underline with ++ markers
     if (j + 1 < line.length && line[j] === '+' && line[j + 1] === '+') {
-      const canToggle = isUnderline || hasUnescapedMarker(line, '++', j + 2)
+      // Flanking rule: an opener must be followed by non-whitespace and a closer
+      // preceded by it, so "C++ and C++" stays literal.
+      const canToggle = isUnderline
+        ? /\S/u.test(line[j - 1] ?? '')
+        : /\S/u.test(line[j + 2] ?? '') && hasUnescapedMarker(line, '++', j + 2)
       if (!canToggle) {
         currentText += '++'
         j++
