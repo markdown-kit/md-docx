@@ -1,6 +1,9 @@
+import { Document, Packer } from 'docx'
+import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
 
 import { convertMarkdownToDocx, parseToDocxOptions } from '../src/index'
+import { modelToDocx } from '../src/modelToDocx'
 import type { RunInfo } from './testUtils'
 import { readDocumentXml, readDocxEntry, readRuns, writeBlobDocx } from './testUtils'
 
@@ -190,6 +193,86 @@ COMMENT: reviewer note`
       )
       const rels = await readDocxEntry(blob, 'word/_rels/document.xml.rels')
       expect(rels).toContain('Target="https://en.wikipedia.org/wiki/Rust_(programming_language%29"')
+    })
+  })
+
+  describe('hard line breaks', () => {
+    /** Body paragraphs of document.xml, in order. */
+    function bodyParagraphs(xml: string): string[] {
+      return [...(xml.split('<w:body>')[1] ?? '').matchAll(/<w:p>[\s\S]*?<\/w:p>/gu)].map(
+        (match) => match[0],
+      )
+    }
+
+    function expectBreakBetween(paragraph: string, before: string, after: string): void {
+      expect(paragraph).toMatch(
+        new RegExp(`>${before}</w:t>[\\s\\S]*<w:br/>[\\s\\S]*>${after}</w:t>`, 'u'),
+      )
+      expect(paragraph).not.toMatch(/<w:t[^>]*>[^<]*\n[^<]*<\/w:t>/u)
+    }
+
+    it('renders a hard break in a paragraph as a Word line break', async () => {
+      const xml = await readDocumentXml(await convertMarkdownToDocx('line one  \nline two'))
+      const paragraphs = bodyParagraphs(xml)
+      expect(paragraphs).toHaveLength(1)
+      expectBreakBetween(paragraphs[0], 'line one', 'line two')
+    })
+
+    it('keeps formatting across a hard break', async () => {
+      const xml = await readDocumentXml(await convertMarkdownToDocx('**bold  \nstill bold**'))
+      expect(readRuns(xml).map((run) => [run.text, run.bold])).toEqual([
+        ['bold', true],
+        ['still bold', true],
+      ])
+      expect(xml).toContain('<w:br/>')
+    })
+
+    it('renders a hard break in a list item as a Word line break', async () => {
+      const xml = await readDocumentXml(await convertMarkdownToDocx('- item one\\\n  continued\n'))
+      const paragraphs = bodyParagraphs(xml)
+      expect(paragraphs).toHaveLength(1)
+      expect(paragraphs[0]).toContain('<w:numPr>')
+      expectBreakBetween(paragraphs[0], 'item one', 'continued')
+    })
+
+    it('renders a hard break in a table cell as a Word line break', async () => {
+      // GFM rows are single lines, so a break node in a cell only arrives via the model.
+      const { children } = await modelToDocx(
+        {
+          children: [
+            {
+              type: 'table',
+              headers: [[{ type: 'text', value: 'h' }]],
+              rows: [
+                [
+                  [
+                    { type: 'text', value: 'cell one' },
+                    { type: 'text', value: '\n', lineBreak: true },
+                    { type: 'text', value: 'cell two' },
+                  ],
+                ],
+              ],
+            },
+          ],
+        },
+        { titleSize: 32, headingSpacing: 240, paragraphSpacing: 240, lineSpacing: 1.15 },
+        {},
+      )
+      const buffer = await Packer.toBuffer(new Document({ sections: [{ children }] }))
+      const xml = await (await JSZip.loadAsync(buffer)).file('word/document.xml')!.async('string')
+      const cellParagraph = bodyParagraphs(xml).find((paragraph) => paragraph.includes('cell one'))
+      expectBreakBetween(cellParagraph ?? '', 'cell one', 'cell two')
+    })
+
+    it('renders a hard break in a blockquote without a stray backslash', async () => {
+      const xml = await readDocumentXml(await convertMarkdownToDocx('> quote one  \n> quote two'))
+      expectBreakBetween(bodyParagraphs(xml)[0], 'quote one', 'quote two')
+      expect(xml).not.toContain('\\')
+    })
+
+    it('keeps a soft line break inside the same line', async () => {
+      const xml = await readDocumentXml(await convertMarkdownToDocx('line one\nline two'))
+      expect(xml).not.toContain('<w:br/>')
     })
   })
 })

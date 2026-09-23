@@ -14,6 +14,8 @@ export interface DocxTextNode {
   subScript?: boolean
   code?: boolean
   link?: string
+  /** Hard line break (mdast `break`); rendered as a Word line break. */
+  lineBreak?: boolean
 }
 
 export interface DocxParagraphNode {

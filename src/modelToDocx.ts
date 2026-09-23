@@ -67,7 +67,14 @@ export async function modelToDocx(
     subScript?: boolean
     code?: boolean
     link?: string
+    lineBreak?: boolean
   }): string {
+    // Backslash-newline is markdown's hard break; literal backslashes in text
+    // are escaped, so the helpers can tell it apart from a soft newline.
+    if (node.lineBreak) {
+      return '\\\n'
+    }
+
     if (node.code) {
       return `\`${escapeInlineText(node.value)}\``
     }

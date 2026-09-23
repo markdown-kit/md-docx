@@ -195,6 +195,13 @@ function processFormattedTextForHeading(text: string, fontSize: number, style?: 
     // Handle escaped characters
     if (text[j] === '\\' && j + 1 < text.length) {
       const nextChar = text[j + 1]
+      // Backslash-newline encodes a hard line break.
+      if (nextChar === '\n') {
+        flushCurrentText()
+        textRuns.push(new TextRun({ break: 1, font: fontFamily }))
+        j++
+        continue
+      }
       if (
         nextChar === '*' ||
         nextChar === '`' ||
@@ -553,10 +560,13 @@ export function processBlockquote(text: string, style: Style): Paragraph {
   // asterisks/brackets, and keep line boundaries as explicit breaks.
   const blockquoteStyle: Style = { ...style, paragraphSize: style.blockquoteSize ?? 24 }
   const children: Array<TextRun | ExternalHyperlink> = []
-  text.split('\n').forEach((line, index) => {
+  text.split('\n').forEach((rawLine, index) => {
     if (index > 0) {
       children.push(new TextRun({ break: 1, font: fontFamily }))
     }
+    // A hard break arrives as backslash-newline; the split already breaks the
+    // line, so drop its unpaired trailing backslash.
+    const line = /(?<!\\)(?:\\\\)*\\$/u.test(rawLine) ? rawLine.slice(0, -1) : rawLine
     for (const run of processFormattedText(line, blockquoteStyle, { italics: true })) {
       children.push(run)
     }
@@ -664,6 +674,13 @@ export function processFormattedText(
     // Handle escaped characters
     if (line[j] === '\\' && j + 1 < line.length) {
       const nextChar = line[j + 1]
+      // Backslash-newline encodes a hard line break.
+      if (nextChar === '\n') {
+        flushCurrentText()
+        textRuns.push(new TextRun({ break: 1, font: fontFamily }))
+        j++
+        continue
+      }
       if (
         nextChar === '*' ||
         nextChar === '`' ||

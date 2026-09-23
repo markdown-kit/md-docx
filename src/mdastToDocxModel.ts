@@ -347,6 +347,7 @@ export function mdastToDocxModel(root: Root, _style: Style, _options: Options): 
           result.push({
             type: 'text',
             value: '\n',
+            lineBreak: true,
           })
           break
         default:
