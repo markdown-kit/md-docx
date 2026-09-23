@@ -341,4 +341,64 @@ describe('sections API', () => {
       }),
     ).rejects.toThrow('Invalid titlePage')
   })
+
+  it('blanks a later section header/footer set to none instead of inheriting it', async () => {
+    const blob = await convertMarkdownToDocx('', {
+      template: { headers: { default: { text: 'Company' } } },
+      sections: [
+        { markdown: '# Body' },
+        {
+          markdown: '# Appendix',
+          pageNumbering: { display: 'none' },
+          headers: { default: null },
+        },
+      ],
+    })
+    const documentXml = await readDocxEntry(blob, 'word/document.xml')
+    const relsXml = await readDocxEntry(blob, 'word/_rels/document.xml.rels')
+    const sectionProperties = [...documentXml.matchAll(/<w:sectPr>([\s\S]*?)<\/w:sectPr>/gu)].map(
+      (match) => match[1],
+    )
+    expect(sectionProperties).toHaveLength(2)
+
+    async function referencedPart(sectPr: string, kind: 'header' | 'footer'): Promise<string> {
+      const relId = new RegExp(`<w:${kind}Reference w:type="default" r:id="([^"]+)"`, 'u').exec(
+        sectPr,
+      )?.[1]
+      expect(relId, `section has a default ${kind} reference`).toBeDefined()
+      const target = new RegExp(`Id="${relId}"[^>]*Target="([^"]+)"`, 'u').exec(relsXml)?.[1]
+      return readDocxEntry(blob, `word/${target}`)
+    }
+
+    const [firstSection, secondSection] = sectionProperties
+    expect(await referencedPart(firstSection, 'header')).toContain('Company')
+    expect(await referencedPart(firstSection, 'footer')).toContain('PAGE')
+
+    const blankHeader = await referencedPart(secondSection, 'header')
+    const blankFooter = await referencedPart(secondSection, 'footer')
+    expect(blankHeader).not.toMatch(/<w:t[^>]*>[^<]+<\/w:t>/u)
+    expect(blankFooter).not.toMatch(/<w:t[^>]*>[^<]+<\/w:t>/u)
+    expect(blankFooter).not.toContain('PAGE')
+
+    const settingsXml = await readDocxEntry(blob, 'word/settings.xml')
+    expect(settingsXml).not.toMatch(/<w:evenAndOddHeaders(?: w:val="true")?\/>/u)
+  })
+
+  it('only blanks a later even slot when the document uses even pages', async () => {
+    const withoutEvenPages = await parseToDocxOptions('', {
+      sections: [{ markdown: '# One' }, { markdown: '# Two', headers: { even: null } }],
+    })
+    expect(withoutEvenPages.evenAndOddHeaderAndFooters).toBeUndefined()
+    expect(withoutEvenPages.sections[1].headers?.even).toBeUndefined()
+
+    const withEvenPages = await parseToDocxOptions('', {
+      sections: [
+        { markdown: '# One', headers: { even: { text: 'Even' } } },
+        { markdown: '# Two', headers: { even: null } },
+      ],
+    })
+    expect(withEvenPages.evenAndOddHeaderAndFooters).toBe(true)
+    expect(withEvenPages.sections[1].headers?.even).toBeDefined()
+    expect(withEvenPages.sections[0].headers?.default).toBeUndefined()
+  })
 })

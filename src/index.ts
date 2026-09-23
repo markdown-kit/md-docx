@@ -744,15 +744,47 @@ function createFooterFromSlot(
   })
 }
 
+type HeaderFooterSlotName = keyof HeaderFooterGroup
+
+/**
+ * Slots a section must render as explicitly empty. Under OOXML a section
+ * without a header/footer reference inherits the previous section's, so for
+ * every section after the first a `null` slot (and, for footers, a default
+ * slot with no content and page numbers off) needs a blank part instead of no
+ * reference. `even` is only blanked when the document already uses even pages,
+ * because any even slot switches even/odd pages on for the whole document.
+ */
+function blankHeaderFooterSlots(
+  group: HeaderFooterGroup | undefined,
+  options: { isFirstSection: boolean; usesEvenPages: boolean; pageNumbersOff?: boolean },
+): HeaderFooterSlotName[] {
+  if (options.isFirstSection) {
+    return []
+  }
+
+  return (['default', 'first', 'even'] as const).filter((slot) => {
+    if (slot === 'even' && !options.usesEvenPages) {
+      return false
+    }
+    const value = group?.[slot]
+    return value === null || (slot === 'default' && value === undefined && options.pageNumbersOff)
+  })
+}
+
 function buildHeaders(
   group: HeaderFooterGroup | undefined,
   style: Style,
+  blankSlots: HeaderFooterSlotName[] = [],
 ): ISectionOptions['headers'] | undefined {
-  if (!group) {
-    return undefined
+  const headers: { default?: Header; first?: Header; even?: Header } = {}
+
+  for (const slot of blankSlots) {
+    headers[slot] = new Header({ children: [new Paragraph({})] })
   }
 
-  const headers: { default?: Header; first?: Header; even?: Header } = {}
+  if (!group) {
+    return Object.keys(headers).length > 0 ? headers : undefined
+  }
 
   if (group.default !== undefined) {
     const header = createHeaderFromSlot(group.default, style)
@@ -779,14 +811,21 @@ function buildHeaders(
 function buildFooters(
   sectionConfig: SectionConfig,
   style: Style,
+  blankSlots: HeaderFooterSlotName[] = [],
 ): ISectionOptions['footers'] | undefined {
   const defaultDisplay = sectionConfig.pageNumbering?.display ?? 'current'
   const defaultAlignment = sectionConfig.pageNumbering?.alignment ?? 'CENTER'
   const group = sectionConfig.footers
 
+  const footers: { default?: Footer; first?: Footer; even?: Footer } = {}
+
+  for (const slot of blankSlots) {
+    footers[slot] = new Footer({ children: [new Paragraph({})] })
+  }
+
   if (!group) {
     if (defaultDisplay === 'none') {
-      return undefined
+      return Object.keys(footers).length > 0 ? footers : undefined
     }
     const autoFooter = createFooterFromSlot(
       {
@@ -799,8 +838,6 @@ function buildFooters(
     )
     return autoFooter ? { default: autoFooter } : undefined
   }
-
-  const footers: { default?: Footer; first?: Footer; even?: Footer } = {}
 
   if (group.default !== undefined) {
     const footer = createFooterFromSlot(group.default, style, defaultDisplay, defaultAlignment)
@@ -1053,9 +1090,16 @@ export async function parseToDocxOptions(
       })
     }
 
+    // Word only shows `even` headers/footers when the document enables
+    // even/odd pages; without the flag every page uses the default slot.
+    const usesEvenPages = renderedSections.some(
+      ({ config }) =>
+        (config.headers?.even ?? null) !== null || (config.footers?.even ?? null) !== null,
+    )
+
     const tocContent = buildTocContent(headings, style)
     let tocInserted = false
-    const docSections: ISectionOptions[] = renderedSections.map((section) => {
+    const docSections: ISectionOptions[] = renderedSections.map((section, index) => {
       const replacedTocChildren = replaceTocPlaceholders(
         section.children,
         tocContent,
@@ -1064,8 +1108,21 @@ export async function parseToDocxOptions(
       )
       ;({ tocInserted } = replacedTocChildren)
 
-      const headers = buildHeaders(section.config.headers, section.style)
-      const footers = buildFooters(section.config, section.style)
+      const isFirstSection = index === 0
+      const headers = buildHeaders(
+        section.config.headers,
+        section.style,
+        blankHeaderFooterSlots(section.config.headers, { isFirstSection, usesEvenPages }),
+      )
+      const footers = buildFooters(
+        section.config,
+        section.style,
+        blankHeaderFooterSlots(section.config.footers, {
+          isFirstSection,
+          usesEvenPages,
+          pageNumbersOff: section.config.pageNumbering?.display === 'none',
+        }),
+      )
 
       return Object.assign(
         { properties: buildSectionProperties(section.config) },
@@ -1104,12 +1161,6 @@ export async function parseToDocxOptions(
     const heading3StyleSize = clampHalfPointSize(style.heading3Size ?? style.titleSize - 8)
     const heading4StyleSize = clampHalfPointSize(style.heading4Size ?? style.titleSize - 12)
     const heading5StyleSize = clampHalfPointSize(style.heading5Size ?? style.titleSize - 16)
-
-    // Word only shows `even` headers/footers when the document enables
-    // even/odd pages; without the flag every page uses the default slot.
-    const usesEvenPages = docSections.some(
-      (section) => section.headers?.even !== undefined || section.footers?.even !== undefined,
-    )
 
     // Create the document with appropriate settings
     const docxOptions: IPropertiesOptions = {
