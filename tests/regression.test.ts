@@ -320,4 +320,14 @@ COMMENT: reviewer note`
     expect(bookmarks).toHaveLength(2)
     expect(new Set(bookmarks).size).toBe(2)
   })
+
+  it.each([
+    { name: 'top-level', markdown: '<!-- COMMENT: hello world -->' },
+    { name: 'inside a list item', markdown: '- item\n\n  <!-- COMMENT: hello world -->' },
+    { name: 'multi-line', markdown: '<!-- COMMENT: hello\nworld -->' },
+  ])('keeps the full text of an HTML COMMENT marker ($name)', async ({ markdown }) => {
+    const xml = await readDocumentXml(await convertMarkdownToDocx(markdown))
+    const commentRun = readRuns(xml).find((run) => run.text.startsWith('Comment:'))
+    expect(commentRun?.text.replace(/\s+/gu, ' ')).toBe('Comment: hello world')
+  })
 })

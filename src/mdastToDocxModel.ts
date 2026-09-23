@@ -90,7 +90,7 @@ export function mdastToDocxModel(root: Root, _style: Style, _options: Options): 
           return null // Will be handled by looking ahead
         }
         if (htmlValue.includes('COMMENT:')) {
-          const match = htmlValue.match(/COMMENT:\s*(.+?)(?:-->)?/)
+          const match = htmlValue.match(/COMMENT:\s*([\s\S]*?)\s*(?:-->|$)/)
           if (match) {
             return {
               type: 'comment',
@@ -398,7 +398,7 @@ export function mdastToDocxModel(root: Root, _style: Style, _options: Options): 
     if (child.type === 'html') {
       const htmlValue = child.value || ''
       if (htmlValue.includes('COMMENT:')) {
-        const match = htmlValue.match(/COMMENT:\s*(.+?)(?:-->)?/)
+        const match = htmlValue.match(/COMMENT:\s*([\s\S]*?)\s*(?:-->|$)/)
         if (match) {
           children.push({
             type: 'comment',
