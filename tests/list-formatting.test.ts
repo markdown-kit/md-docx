@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { convertMarkdownToDocx } from '../src/index'
+import { readDocumentXml, readDocxEntry } from './testUtils'
 
 describe('List Item Formatting', () => {
   it('should handle bold text within list items', async () => {
@@ -55,5 +56,41 @@ describe('List Item Formatting', () => {
     expect(docxBlob.type).toBe(
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     )
+  })
+
+  it('numbers nested ordered list items at their own level', async () => {
+    const blob = await convertMarkdownToDocx('1. a\n   1. a1\n   2. a2\n2. b\n')
+    const documentXml = await readDocumentXml(blob)
+    const numberingXml = await readDocxEntry(blob, 'word/numbering.xml')
+
+    const itemNumbering = new Map(
+      [
+        ...documentXml.matchAll(
+          /<w:ilvl w:val="(\d+)"\/><w:numId w:val="(\d+)"\/>[\s\S]*?<w:t[^>]*>([^<]*)<\/w:t>/gu,
+        ),
+      ].map((match) => [match[3], { ilvl: match[1], numId: match[2] }]),
+    )
+    const nested = itemNumbering.get('a1')
+    expect(nested?.ilvl).toBe('1')
+
+    const abstractNumId = new RegExp(
+      `<w:num w:numId="${nested?.numId}"[^>]*><w:abstractNumId w:val="(\\d+)"/>`,
+      'u',
+    ).exec(numberingXml)?.[1]
+    const abstractNum = new RegExp(
+      `<w:abstractNum [^>]*w:abstractNumId="${abstractNumId}"[^>]*>([\\s\\S]*?)</w:abstractNum>`,
+      'u',
+    ).exec(numberingXml)?.[1]
+    const levels = [
+      ...(abstractNum ?? '').matchAll(/<w:lvl w:ilvl="(\d+)"[^>]*>([\s\S]*?)<\/w:lvl>/gu),
+    ]
+    expect(levels.map((level) => level[1])).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8'])
+
+    const level1 = levels[1][2]
+    expect(level1).toContain('<w:numFmt w:val="decimal"/>')
+    expect(level1).toContain('<w:lvlText w:val="%2."/>')
+    const indentOf = (level: string): number =>
+      Number(/<w:ind w:left="(\d+)"/u.exec(level)?.[1] ?? Number.NaN)
+    expect(indentOf(level1)).toBeGreaterThan(indentOf(levels[0][2]))
   })
 })

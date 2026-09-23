@@ -1079,21 +1079,21 @@ export async function parseToDocxOptions(
     for (let i = 1; i <= maxSequenceId; i++) {
       numberingConfigs.push({
         reference: `numbered-list-${i}`,
-        levels: [
-          {
-            level: 0,
-            format: LevelFormat.DECIMAL,
-            text: '%1.',
-            alignment: AlignmentType.LEFT,
-            // Honor an ordered list's `start: N` (e.g. a list beginning at 5).
-            start: sequenceStarts.get(i) ?? 1,
-            style: {
-              paragraph: {
-                indent: { left: 720, hanging: 260 },
-              },
+        // Define all nine OOXML levels: a nested ordered list renders at
+        // ilvl >= 1, and an undefined level shows no number.
+        levels: Array.from({ length: 9 }, (_, level) => ({
+          level,
+          format: LevelFormat.DECIMAL,
+          text: `%${level + 1}.`,
+          alignment: AlignmentType.LEFT,
+          // Honor an ordered list's `start: N` (e.g. a list beginning at 5).
+          start: sequenceStarts.get(i) ?? 1,
+          style: {
+            paragraph: {
+              indent: { left: 720 * (level + 1), hanging: 260 },
             },
           },
-        ],
+        })),
       })
     }
 
