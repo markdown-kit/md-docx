@@ -1036,6 +1036,7 @@ export async function parseToDocxOptions(
       const model = mdastToDocxModel(ast, section.style, options)
       const renderedModel = await modelToDocx(model, section.style, options, {
         sequenceIdOffset: maxSequenceId,
+        headingOffset: headings.length,
       })
 
       maxSequenceId = Math.max(maxSequenceId, renderedModel.maxSequenceId)

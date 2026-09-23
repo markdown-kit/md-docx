@@ -70,12 +70,14 @@ function hasUnescapedMarker(text: string, marker: string, startIndex: number): b
  * @param line - The heading line to process
  * @param config - The heading configuration
  * @param style - The style configuration
+ * @param bookmarkIndex - Document-wide heading counter that keeps bookmark names unique
  * @returns An object containing the processed paragraph and its bookmark ID
  */
 export function processHeading(
   line: string,
   config: HeadingConfig,
   style: Style,
+  bookmarkIndex: number,
 ): { paragraph: Paragraph; bookmarkId: string } {
   const headingText = line.replace(new RegExp(`^#{${config.level}} `), '')
   const headingLevel = config.level
@@ -85,7 +87,7 @@ export function processHeading(
     .replace(/\*/g, '')
     .replace(/\+\+/g, '')
     .replace(/~~/g, '')
-  const bookmarkId = `_Toc_${sanitizeForBookmarkId(cleanTextForBookmark)}_${Date.now()}`
+  const bookmarkId = `_Toc_${sanitizeForBookmarkId(cleanTextForBookmark)}_${bookmarkIndex}`
 
   // Get the appropriate font size based on heading level and custom style
   let headingSize = style.titleSize

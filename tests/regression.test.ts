@@ -281,4 +281,43 @@ COMMENT: reviewer note`
     const styles = [...xml.matchAll(/<w:pStyle w:val="([^"]+)"\/>/gu)].map((match) => match[1])
     expect(new Set(styles)).toEqual(new Set(['Heading6']))
   })
+
+  it('gives duplicate headings unique bookmarks and plain-text TOC entries', async () => {
+    const blob = await convertMarkdownToDocx(
+      '[TOC]\n\n## Setup **fast**\n\n## Setup **fast**\n\n## The `cli` \\*tool\\*\n',
+    )
+    const xml = await readDocumentXml(blob)
+
+    const bookmarks = [...xml.matchAll(/<w:bookmarkStart [^>]*w:name="([^"]+)"/gu)].map(
+      (match) => match[1],
+    )
+    expect(bookmarks).toHaveLength(3)
+    expect(new Set(bookmarks).size).toBe(3)
+
+    const tocEntries = [
+      ...xml.matchAll(/<w:hyperlink [^>]*w:anchor="([^"]+)"[^>]*>([\s\S]*?)<\/w:hyperlink>/gu),
+    ].map((match) => ({
+      anchor: match[1],
+      text: [...match[2].matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/gu)].map((t) => t[1]).join(''),
+    }))
+    expect(tocEntries.map((entry) => entry.text)).toEqual([
+      'Setup fast',
+      'Setup fast',
+      'The cli *tool*',
+    ])
+    expect(tocEntries.map((entry) => entry.anchor)).toEqual(bookmarks)
+  })
+
+  it('keeps bookmark names unique across sections', async () => {
+    const xml = await readDocumentXml(
+      await convertMarkdownToDocx('', {
+        sections: [{ markdown: '# Intro' }, { markdown: '# Intro' }],
+      }),
+    )
+    const bookmarks = [...xml.matchAll(/<w:bookmarkStart [^>]*w:name="([^"]+)"/gu)].map(
+      (match) => match[1],
+    )
+    expect(bookmarks).toHaveLength(2)
+    expect(new Set(bookmarks).size).toBe(2)
+  })
 })

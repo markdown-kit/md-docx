@@ -27,7 +27,7 @@ export async function modelToDocx(
   model: DocxDocumentModel,
   style: Style,
   options: Options,
-  renderOptions: { sequenceIdOffset?: number } = {},
+  renderOptions: { sequenceIdOffset?: number; headingOffset?: number } = {},
 ): Promise<{
   children: Array<Paragraph | Table>
   headings: Array<{ text: string; level: number; bookmarkId: string }>
@@ -39,6 +39,8 @@ export async function modelToDocx(
   const headings: Array<{ text: string; level: number; bookmarkId: string }> = []
   const documentType = options.documentType ?? 'document'
   const sequenceIdOffset = renderOptions.sequenceIdOffset ?? 0
+  // Headings rendered by earlier sections, so bookmark names stay unique.
+  const headingOffset = renderOptions.headingOffset ?? 0
   const tocPlaceholders = new WeakSet<Paragraph>()
 
   // Track numbering sequences for nested lists
@@ -150,9 +152,15 @@ export async function modelToDocx(
           size: 0,
           style: node.level === 1 ? 'Title' : undefined,
         }
-        const { paragraph, bookmarkId } = processHeading(headingLine, config, style)
+        const { paragraph, bookmarkId } = processHeading(
+          headingLine,
+          config,
+          style,
+          headingOffset + headings.length + 1,
+        )
         headings.push({
-          text: headingText,
+          // TOC entries show the plain heading text, not the encoded markers.
+          text: node.children.map((child) => child.value).join(''),
           level: node.level,
           bookmarkId,
         })
