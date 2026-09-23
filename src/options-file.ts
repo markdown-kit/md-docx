@@ -1,6 +1,8 @@
 import type {
   AlignmentOption,
+  DocxToMarkdownMammothOptions,
   DocxToMarkdownOptions,
+  DocxToMarkdownTurndownOptions,
   HeaderFooterGroup,
   HeaderFooterSlot,
   JsonTextReplacement,
@@ -610,66 +612,111 @@ export function parseDocxToMarkdownOptionsFile(
     const mammothRecord = expectPlainObject(record.mammoth, `${context}.mammoth`)
     assertAllowedKeys(mammothRecord, MAMMOTH_KEYS, `${context}.mammoth`)
 
-    options.mammoth = {
-      styleMap: readOptionalStringArray(mammothRecord.styleMap, `${context}.mammoth.styleMap`),
-      includeDefaultStyleMap: readOptionalBoolean(
-        mammothRecord.includeDefaultStyleMap,
-        `${context}.mammoth.includeDefaultStyleMap`,
-      ),
-      includeEmbeddedStyleMap: readOptionalBoolean(
-        mammothRecord.includeEmbeddedStyleMap,
-        `${context}.mammoth.includeEmbeddedStyleMap`,
-      ),
-      preserveEmptyParagraphs: readOptionalBoolean(
-        mammothRecord.preserveEmptyParagraphs,
-        `${context}.mammoth.preserveEmptyParagraphs`,
-      ),
+    const mammoth: DocxToMarkdownMammothOptions = {}
+
+    const styleMap = readOptionalStringArray(mammothRecord.styleMap, `${context}.mammoth.styleMap`)
+    if (styleMap !== undefined) {
+      mammoth.styleMap = styleMap
     }
+
+    for (const key of [
+      'includeDefaultStyleMap',
+      'includeEmbeddedStyleMap',
+      'preserveEmptyParagraphs',
+    ] as const) {
+      const booleanValue = readOptionalBoolean(mammothRecord[key], `${context}.mammoth.${key}`)
+      if (booleanValue !== undefined) {
+        mammoth[key] = booleanValue
+      }
+    }
+
+    options.mammoth = mammoth
   }
 
   if (record.turndown !== undefined) {
     const turndownRecord = expectPlainObject(record.turndown, `${context}.turndown`)
     assertAllowedKeys(turndownRecord, TURNDOWN_KEYS, `${context}.turndown`)
 
-    options.turndown = {
-      headingStyle: readOptionalEnum(
-        turndownRecord.headingStyle,
-        ['setext', 'atx'],
-        `${context}.turndown.headingStyle`,
-      ),
-      hr: readOptionalString(turndownRecord.hr, `${context}.turndown.hr`),
-      bulletListMarker: readOptionalEnum(
-        turndownRecord.bulletListMarker,
-        ['-', '*', '+'],
-        `${context}.turndown.bulletListMarker`,
-      ),
-      codeBlockStyle: readOptionalEnum(
-        turndownRecord.codeBlockStyle,
-        ['indented', 'fenced'],
-        `${context}.turndown.codeBlockStyle`,
-      ),
-      fence: readOptionalEnum(turndownRecord.fence, ['```', '~~~'], `${context}.turndown.fence`),
-      emDelimiter: readOptionalEnum(
-        turndownRecord.emDelimiter,
-        ['_', '*'],
-        `${context}.turndown.emDelimiter`,
-      ),
-      strongDelimiter: readOptionalEnum(
-        turndownRecord.strongDelimiter,
-        ['**', '__'],
-        `${context}.turndown.strongDelimiter`,
-      ),
-      linkStyle: readOptionalEnum(
-        turndownRecord.linkStyle,
-        ['inlined', 'referenced'],
-        `${context}.turndown.linkStyle`,
-      ),
-      linkReferenceStyle: readOptionalEnum(
-        turndownRecord.linkReferenceStyle,
-        ['full', 'collapsed', 'shortcut'],
-        `${context}.turndown.linkReferenceStyle`,
-      ),
+    const turndown: DocxToMarkdownTurndownOptions = {}
+
+    const headingStyle = readOptionalEnum(
+      turndownRecord.headingStyle,
+      ['setext', 'atx'],
+      `${context}.turndown.headingStyle`,
+    )
+    if (headingStyle !== undefined) {
+      turndown.headingStyle = headingStyle
     }
+
+    const hr = readOptionalString(turndownRecord.hr, `${context}.turndown.hr`)
+    if (hr !== undefined) {
+      turndown.hr = hr
+    }
+
+    const bulletListMarker = readOptionalEnum(
+      turndownRecord.bulletListMarker,
+      ['-', '*', '+'],
+      `${context}.turndown.bulletListMarker`,
+    )
+    if (bulletListMarker !== undefined) {
+      turndown.bulletListMarker = bulletListMarker
+    }
+
+    const codeBlockStyle = readOptionalEnum(
+      turndownRecord.codeBlockStyle,
+      ['indented', 'fenced'],
+      `${context}.turndown.codeBlockStyle`,
+    )
+    if (codeBlockStyle !== undefined) {
+      turndown.codeBlockStyle = codeBlockStyle
+    }
+
+    const fence = readOptionalEnum(
+      turndownRecord.fence,
+      ['```', '~~~'],
+      `${context}.turndown.fence`,
+    )
+    if (fence !== undefined) {
+      turndown.fence = fence
+    }
+
+    const emDelimiter = readOptionalEnum(
+      turndownRecord.emDelimiter,
+      ['_', '*'],
+      `${context}.turndown.emDelimiter`,
+    )
+    if (emDelimiter !== undefined) {
+      turndown.emDelimiter = emDelimiter
+    }
+
+    const strongDelimiter = readOptionalEnum(
+      turndownRecord.strongDelimiter,
+      ['**', '__'],
+      `${context}.turndown.strongDelimiter`,
+    )
+    if (strongDelimiter !== undefined) {
+      turndown.strongDelimiter = strongDelimiter
+    }
+
+    const linkStyle = readOptionalEnum(
+      turndownRecord.linkStyle,
+      ['inlined', 'referenced'],
+      `${context}.turndown.linkStyle`,
+    )
+    if (linkStyle !== undefined) {
+      turndown.linkStyle = linkStyle
+    }
+
+    const linkReferenceStyle = readOptionalEnum(
+      turndownRecord.linkReferenceStyle,
+      ['full', 'collapsed', 'shortcut'],
+      `${context}.turndown.linkReferenceStyle`,
+    )
+    if (linkReferenceStyle !== undefined) {
+      turndown.linkReferenceStyle = linkReferenceStyle
+    }
+
+    options.turndown = turndown
   }
 
   const normalizeWhitespace = readOptionalBoolean(

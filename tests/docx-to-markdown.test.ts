@@ -61,6 +61,35 @@ describe('convertDocxToMarkdown', () => {
     expect(markdown).not.toMatch(/<\/?tr/i)
   })
 
+  it('applies the README turndown options without clobbering unset defaults', async () => {
+    const docxBlob = await convertMarkdownToDocx(
+      'Some *italic* and **bold** text.\n\n```\nconst x = 1\n```\n',
+    )
+    const docxBuffer = Buffer.from(await docxBlob.arrayBuffer())
+
+    const markdown = await convertDocxToMarkdown(docxBuffer, {
+      mammoth: { preserveEmptyParagraphs: true },
+      turndown: { headingStyle: 'atx', codeBlockStyle: 'fenced', bulletListMarker: '-' },
+    })
+
+    expect(markdown).toContain('*italic*')
+    expect(markdown).toContain('**bold**')
+    expect(markdown).toContain('```\nconst x = 1\n```')
+    expect(markdown).not.toContain('undefined')
+  })
+
+  it('keeps markdown lists when converting md -> docx -> md', async () => {
+    const docxBlob = await convertMarkdownToDocx('- one\n- two\n\n1. first\n2. second\n')
+    const docxBuffer = Buffer.from(await docxBlob.arrayBuffer())
+
+    const markdown = await convertDocxToMarkdown(docxBuffer)
+
+    expect(markdown).toMatch(/^-\s+one$/mu)
+    expect(markdown).toMatch(/^-\s+two$/mu)
+    expect(markdown).toMatch(/^1\.\s+first$/mu)
+    expect(markdown).toMatch(/^2\.\s+second$/mu)
+  })
+
   it('throws on empty DOCX content', async () => {
     await expect(convertDocxToMarkdown(Buffer.alloc(0))).rejects.toThrow(
       'Invalid DOCX input: file content is empty',

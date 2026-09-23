@@ -220,8 +220,14 @@ export async function convertDocxToMarkdown(
       },
       {
         styleMap: [...defaultMammothStyleMap, ...(validatedOptions.mammoth?.styleMap ?? [])],
-        includeDefaultStyleMap: validatedOptions.mammoth?.includeDefaultStyleMap,
-        includeEmbeddedStyleMap: validatedOptions.mammoth?.includeEmbeddedStyleMap,
+        // Only forward flags the caller set: mammoth treats an explicit
+        // `undefined` as false and would drop its default style map (lists).
+        ...(validatedOptions.mammoth?.includeDefaultStyleMap !== undefined && {
+          includeDefaultStyleMap: validatedOptions.mammoth.includeDefaultStyleMap,
+        }),
+        ...(validatedOptions.mammoth?.includeEmbeddedStyleMap !== undefined && {
+          includeEmbeddedStyleMap: validatedOptions.mammoth.includeEmbeddedStyleMap,
+        }),
         ignoreEmptyParagraphs:
           validatedOptions.mammoth?.preserveEmptyParagraphs === true ? false : true,
         convertImage: mammoth.images.dataUri,
