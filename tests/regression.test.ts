@@ -275,4 +275,10 @@ COMMENT: reviewer note`
       expect(xml).not.toContain('<w:br/>')
     })
   })
+
+  it('maps a level-6 heading to the Heading6 style', async () => {
+    const xml = await readDocumentXml(await convertMarkdownToDocx('###### Six'))
+    const styles = [...xml.matchAll(/<w:pStyle w:val="([^"]+)"\/>/gu)].map((match) => match[1])
+    expect(new Set(styles)).toEqual(new Set(['Heading6']))
+  })
 })

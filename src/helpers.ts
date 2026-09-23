@@ -44,6 +44,8 @@ function resolveHeadingLevel(level: number): (typeof HeadingLevel)[keyof typeof 
       return HeadingLevel.HEADING_4
     case 5:
       return HeadingLevel.HEADING_5
+    case 6:
+      return HeadingLevel.HEADING_6
     default:
       return HeadingLevel.HEADING_1
   }
