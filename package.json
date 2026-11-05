@@ -69,34 +69,34 @@
     "release": "release-kit"
   },
   "dependencies": {
-    "docx": "^9.7.1",
+    "docx": "^9.15.2",
     "file-saver": "^2.0.5",
-    "mammoth": "^1.12.3",
-    "mdast-util-find-and-replace": "^3.0.2",
+    "mammoth": "^1.13.0",
+    "mdast-util-find-and-replace": "^3.0.4",
     "remark": "^15.0.1",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
-    "turndown": "^7.2.4",
+    "turndown": "^7.2.5",
     "turndown-plugin-gfm": "^1.0.2",
     "unified": "^11.0.5",
-    "unist-util-visit": "^5.1.0"
+    "unist-util-visit": "^5.2.0"
   },
   "devDependencies": {
-    "@entro314labs/release-kit": "^2.9.4",
+    "@entro314labs/release-kit": "^3.0.0",
     "@types/file-saver": "^2.0.7",
     "@types/mdast": "^4.0.4",
-    "@types/node": "^26.6.1",
+    "@types/node": "^26.6.6",
     "@types/turndown": "^5.0.6",
-    "@vitest/coverage-v8": "^5.0.1",
+    "@vitest/coverage-v8": "^5.1.0",
     "jszip": "^3.10.2",
-    "oxfmt": "^0.68.0",
-    "oxlint": "^1.83.0",
-    "oxlint-tsgolint": "^7.0.2001",
-    "rimraf": "^6.1.3",
+    "oxfmt": "^0.76.0",
+    "oxlint": "^1.91.0",
+    "oxlint-tsgolint": "^7.0.2005",
+    "rimraf": "^6.1.4",
     "typescript": "next",
-    "vitest": "^5.0.1"
+    "vitest": "^5.1.0"
   },
   "engines": {
-    "node": ">=24.19.0"
+    "node": ">=24.22.2"
   }
 }

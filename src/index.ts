@@ -1319,8 +1319,7 @@ export async function parseToDocxOptions(
  * Downloads a DOCX file in the browser environment
  * @param blob - The Blob containing the DOCX file data
  * @param filename - The name to save the file as (defaults to "document.docx")
- * @throws {Error} If the function is called outside browser environment
- * @throws {Error} If invalid blob or filename is provided
+ * @throws {TypeError} If called outside a browser or given an invalid blob
  * @throws {Error} If file save fails
  */
 export function downloadDocx(blob: Blob, filename = 'document.docx'): void {
@@ -1328,7 +1327,7 @@ export function downloadDocx(blob: Blob, filename = 'document.docx'): void {
     throw new TypeError('This function can only be used in browser environments')
   }
   if (!(blob instanceof Blob)) {
-    throw new Error('Invalid blob provided')
+    throw new TypeError('Invalid blob provided')
   }
   if (!filename || typeof filename !== 'string') {
     throw new Error('Invalid filename provided')

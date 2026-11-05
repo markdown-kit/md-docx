@@ -146,7 +146,7 @@ const fromDocx = await convertDocxToMarkdown(docxBuffer)
 
 ## Notes
 
-- Runtime target: **Node 24.19.0+**.
+- Runtime target: **Node 24.22.2+**.
 - Browser download helper is available via `downloadDocx`, while core conversion works in Node.
 - `convertDocxToMarkdown` is Node-focused and expects DOCX binary input (`Buffer`, `Uint8Array`, or `ArrayBuffer`).
 - Legacy style option `fontFamilly` is still accepted for compatibility; prefer `fontFamily`.
