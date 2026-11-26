@@ -89,9 +89,9 @@
     "@types/turndown": "^5.0.6",
     "@vitest/coverage-v8": "^5.1.0",
     "jszip": "^3.10.2",
-    "oxfmt": "^0.76.0",
-    "oxlint": "^1.91.0",
-    "oxlint-tsgolint": "^7.0.2005",
+    "oxfmt": "^0.77.0",
+    "oxlint": "^1.92.0",
+    "oxlint-tsgolint": "^7.0.2006",
     "rimraf": "^6.1.4",
     "typescript": "next",
     "vitest": "^5.1.0"
